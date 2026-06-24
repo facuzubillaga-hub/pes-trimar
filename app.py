@@ -217,7 +217,10 @@ def list_pes():
     rows = db.execute("SELECT nro_pe, buque, pais_destino, fecha_oficializacion FROM permisos ORDER BY fecha_oficializacion DESC, nro_pe DESC").fetchall()
     return jsonify([dict(r) for r in rows])
 
-if __name__ == "__main__":
+# Inicializar DB siempre al arrancar (tanto local como gunicorn)
+with app.app_context():
     init_db()
+
+if __name__ == "__main__":
     print("✅ App corriendo en http://localhost:5000")
     app.run(debug=False, port=5000)
