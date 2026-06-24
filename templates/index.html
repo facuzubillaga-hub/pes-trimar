@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestor de PEs — Trimar</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f0f4f8; color: #1a2a3a; min-height: 100vh; }
+  header { background: #1F4E79; color: white; padding: 18px 32px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  header h1 { font-size: 1.2rem; font-weight: 700; }
+  header span { font-size: 0.85rem; opacity: 0.75; }
+  .container { max-width: 960px; margin: 32px auto; padding: 0 20px; }
+  .card { background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); padding: 28px 32px; margin-bottom: 24px; }
+  .card h2 { font-size: 1rem; color: #1F4E79; margin-bottom: 18px; border-bottom: 2px solid #BDD7EE; padding-bottom: 10px; }
+  .drop-zone { border: 2px dashed #BDD7EE; border-radius: 8px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.2s; background: #f7fbff; }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: #1F4E79; background: #e8f0fb; }
+  .drop-zone p { color: #555; font-size: 0.9rem; }
+  .drop-zone p strong { color: #1F4E79; }
+  #file-input { display: none; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s; text-decoration: none; }
+  .btn-primary { background: #1F4E79; color: white; }
+  .btn-primary:hover { background: #163a5f; }
+  .btn-success { background: #217346; color: white; }
+  .btn-success:hover { background: #185a36; }
+  .btn-outline { background: white; color: #1F4E79; border: 2px solid #1F4E79; }
+  .btn-outline:hover { background: #e8f0fb; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .loader { display: none; text-align: center; padding: 30px; }
+  .spinner { width: 40px; height: 40px; border: 4px solid #BDD7EE; border-top-color: #1F4E79; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #preview-section { display: none; }
+  .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-bottom: 20px; }
+  .field-group { display: flex; flex-direction: column; gap: 4px; }
+  .field-group label { font-size: 0.75rem; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .field-group input { border: 1px solid #d0d9e3; border-radius: 5px; padding: 7px 10px; font-size: 0.9rem; background: #fafcff; transition: border 0.15s; }
+  .field-group input:focus { outline: none; border-color: #1F4E79; }
+  .field-group input.changed { border-color: #e67e22; background: #fff8f0; }
+  .alert { padding: 12px 16px; border-radius: 6px; font-size: 0.88rem; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .alert-warning { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+  .alert-danger  { background: #f8d7da; color: #842029; border: 1px solid #f5c2c7; }
+  .alert-success { background: #d1e7dd; color: #0a3622; border: 1px solid #a3cfbb; }
+  .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .pe-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .pe-table th { background: #1F4E79; color: white; padding: 8px 12px; text-align: left; font-weight: 600; }
+  .pe-table td { padding: 7px 12px; border-bottom: 1px solid #e8f0fb; }
+  .pe-table tr:nth-child(even) td { background: #f7fbff; }
+  .pe-table tr:hover td { background: #e8f0fb; }
+  .empty-list { color: #999; font-style: italic; font-size: 0.9rem; }
+  footer { text-align: center; color: #aaa; font-size: 0.78rem; padding: 24px 0 40px; }
+</style>
+</head>
+<body>
+<header>
+  <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+  <div>
+    <h1>Gestor de Permisos de Exportación</h1>
+    <span>Agencia Trimar S.A. — Puerto Quequén</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <h2>📄 Cargar nuevo PE</h2>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="#1F4E79" stroke-width="1.5" style="margin-bottom:12px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+      <p><strong>Hacé click o arrastrá el PDF</strong> del Permiso de Exportación aquí</p>
+      <p style="margin-top:6px; font-size:0.8rem; color:#999;">Solo archivos .pdf — se procesa con IA automáticamente</p>
+    </div>
+    <input type="file" id="file-input" accept=".pdf">
+  </div>
+
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <p style="color:#555;">Procesando PE con IA...</p>
+  </div>
+
+  <div class="card" id="preview-section">
+    <h2>✏️ Verificar y confirmar datos</h2>
+    <div id="alert-box"></div>
+    <div class="preview-grid" id="preview-grid"></div>
+    <div class="actions">
+      <button class="btn btn-success" id="btn-confirm" onclick="confirmPE()">
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+        Confirmar y guardar
+      </button>
+      <button class="btn btn-outline" onclick="resetApp()">Cancelar</button>
+      <span id="status-msg" style="font-size:0.85rem; color:#555;"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📊 PEs registrados</h2>
+    <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+      <a href="/download" class="btn btn-success" download>
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 3v13.5m0 0l-4.5-4.5M12 16.5l4.5-4.5"/></svg>
+        Descargar Excel
+      </a>
+      <button class="btn btn-outline" onclick="loadList()">↻ Actualizar</button>
+    </div>
+    <div id="pe-list"><span class="empty-list">Cargando...</span></div>
+  </div>
+
+</div>
+
+<footer>Trimar S.A. · Gestor de PEs · procesamiento vía Claude AI</footer>
+
+<script>
+let currentData = null;
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if (f && f.type === 'application/pdf') uploadFile(f); });
+document.getElementById('file-input').addEventListener('change', e => { if (e.target.files[0]) uploadFile(e.target.files[0]); });
+
+function uploadFile(file) {
+  document.getElementById('preview-section').style.display = 'none';
+  document.getElementById('loader').style.display = 'block';
+  const fd = new FormData(); fd.append('pdf', file);
+  fetch('/upload', { method: 'POST', body: fd })
+    .then(r => r.json()).then(data => {
+      document.getElementById('loader').style.display = 'none';
+      if (data.error) { alert('Error: ' + data.error); return; }
+      currentData = data; showPreview(data);
+    }).catch(err => { document.getElementById('loader').style.display = 'none'; alert('Error: ' + err.message); });
+}
+
+const FIELD_LABELS = {
+  nro_pe:"Nº PE", fecha_oficializacion:"Fecha Oficialización", buque:"Buque", bandera:"Bandera",
+  pais_destino:"País Destino", mercaderia:"Mercadería", posicion_arancelaria:"Posición Arancelaria",
+  cond_venta:"Cond. Venta", peso_bruto_kg:"Peso Bruto (kg)", toneladas:"Toneladas",
+  fob_total_usd:"FOB Total (USD)", flete_usd:"Flete (USD)", precio_unit_usd_tn:"Precio Unit. (USD/Tn)",
+  precio_oficial_usd_tn:"Precio Oficial (USD/Tn)", djve:"DJVE", fecha_cierre_vta:"Fecha Cierre Vta.",
+  vto_embarque:"Vto. Embarque", ant_gan_usd:"Ant. Gan. (USD)", cotizacion:"Cotización"
+};
+
+function showPreview(data) {
+  const grid = document.getElementById('preview-grid');
+  const alertBox = document.getElementById('alert-box');
+  grid.innerHTML = ''; alertBox.innerHTML = '';
+  if (data.already_exists) alertBox.innerHTML = `<div class="alert alert-warning">⚠️ El PE <strong>${data.nro_pe}</strong> ya existe. Verificá antes de confirmar.</div>`;
+  Object.keys(FIELD_LABELS).forEach(key => {
+    const div = document.createElement('div'); div.className = 'field-group';
+    const label = document.createElement('label'); label.textContent = FIELD_LABELS[key];
+    const input = document.createElement('input'); input.type = 'text'; input.id = 'field_' + key;
+    input.value = data[key] !== null && data[key] !== undefined ? data[key] : '';
+    input.addEventListener('input', () => { input.classList.add('changed'); currentData[key] = input.value; });
+    div.appendChild(label); div.appendChild(input); grid.appendChild(div);
+  });
+  document.getElementById('preview-section').style.display = 'block';
+  document.getElementById('status-msg').textContent = '';
+  document.getElementById('preview-section').scrollIntoView({ behavior: 'smooth' });
+}
+
+function confirmPE() {
+  const btn = document.getElementById('btn-confirm');
+  const msg = document.getElementById('status-msg');
+  btn.disabled = true; msg.textContent = 'Guardando...';
+  Object.keys(FIELD_LABELS).forEach(key => {
+    const el = document.getElementById('field_' + key);
+    if (el) currentData[key] = el.value;
+  });
+  delete currentData.already_exists;
+  fetch('/confirm', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(currentData) })
+    .then(r => r.json()).then(res => {
+      btn.disabled = false;
+      if (res.error) { document.getElementById('alert-box').innerHTML = `<div class="alert alert-danger">❌ ${res.error}</div>`; msg.textContent = ''; return; }
+      document.getElementById('alert-box').innerHTML = `<div class="alert alert-success">✅ PE <strong>${res.nro_pe}</strong> guardado correctamente.</div>`;
+      msg.textContent = ''; loadList(); setTimeout(resetApp, 3000);
+    }).catch(err => { btn.disabled = false; msg.textContent = 'Error: ' + err.message; });
+}
+
+function resetApp() {
+  document.getElementById('preview-section').style.display = 'none';
+  document.getElementById('file-input').value = ''; currentData = null;
+}
+
+function loadList() {
+  fetch('/list').then(r => r.json()).then(list => {
+    const el = document.getElementById('pe-list');
+    if (!list.length) { el.innerHTML = '<span class="empty-list">No hay PEs registrados aún</span>'; return; }
+    el.innerHTML = `<table class="pe-table">
+      <thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th></tr></thead>
+      <tbody>${list.map(p => `<tr><td><strong>${p.nro_pe}</strong></td><td>${p.fecha_oficializacion}</td><td>${p.buque}</td><td>${p.pais_destino}</td></tr>`).join('')}</tbody>
+    </table>`;
+  });
+}
+loadList();
+</script>
+</body>
+</html>
