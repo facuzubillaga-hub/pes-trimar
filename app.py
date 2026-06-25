@@ -303,11 +303,12 @@ def upload():
     data["already_exists"] = exists is not None
     djve = str(data.get("djve") or "").strip()
     buque = str(data.get("buque") or "").strip().upper()
+toneladas = str(data.get("toneladas") or "").strip()
     sol = None
-    if djve:
+    if djve and toneladas:
+        sol = db.execute("SELECT booking, buque, fecha_solicitud FROM solicitudes WHERE djve=? AND CAST(cantidad_tn AS INTEGER)=CAST(? AS INTEGER)", (djve, toneladas)).fetchone()
+    if not sol and djve:
         sol = db.execute("SELECT booking, buque, fecha_solicitud FROM solicitudes WHERE djve=?", (djve,)).fetchone()
-    if not sol and buque:
-        sol = db.execute("SELECT booking, buque, fecha_solicitud FROM solicitudes WHERE UPPER(buque)=?", (buque,)).fetchone()
     data["solicitud_match"] = dict(sol) if sol else None
     return jsonify(data)
 
@@ -335,11 +336,12 @@ def list_pes():
         d = dict(row)
         djve = str(d.get("djve") or "").strip()
         buque = str(d.get("buque") or "").strip().upper()
+      toneladas = str(d.get("toneladas") or "").strip()
         sol = None
-        if djve:
+        if djve and toneladas:
+            sol = db.execute("SELECT booking FROM solicitudes WHERE djve=? AND CAST(cantidad_tn AS INTEGER)=CAST(? AS INTEGER)", (djve, toneladas)).fetchone()
+        if not sol and djve:
             sol = db.execute("SELECT booking FROM solicitudes WHERE djve=?", (djve,)).fetchone()
-        if not sol and buque:
-            sol = db.execute("SELECT booking FROM solicitudes WHERE UPPER(buque)=?", (buque,)).fetchone()
         d["booking"] = sol["booking"] if sol and sol["booking"] else None
         result.append(d)
     return jsonify(result)
@@ -391,7 +393,14 @@ def list_solicitudes():
     result = []
     for row in rows:
         d = dict(row)
-        d["tiene_pe"] = str(d.get("djve") or "").strip() in pe_djves or str(d.get("buque") or "").upper() in pe_buques
+         djve_sol = str(d.get("djve") or "").strip()
+        cant_sol = str(d.get("cantidad_tn") or "").strip()
+        tiene_pe = False
+        if djve_sol and cant_sol:
+            tiene_pe = bool(db.execute("SELECT 1 FROM permisos WHERE djve=? AND CAST(toneladas AS INTEGER)=CAST(? AS INTEGER)", (djve_sol, cant_sol)).fetchone())
+        if not tiene_pe and djve_sol:
+            tiene_pe = djve_sol in pe_djves
+        d["tiene_pe"] = tiene_pe
         result.append(d)
     return jsonify(result)
 
