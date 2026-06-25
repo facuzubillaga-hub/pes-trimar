@@ -491,18 +491,21 @@ def plan_list():
     sol_bookings = set(str(r[0] or "").strip() for r in db.execute("SELECT booking FROM solicitudes WHERE booking IS NOT NULL").fetchall())
     sol_buques = set(str(r[0] or "").strip().upper() for r in db.execute("SELECT buque FROM solicitudes WHERE buque IS NOT NULL").fetchall())
     pe_buques = set(str(r[0] or "").strip().upper() for r in db.execute("SELECT buque FROM permisos WHERE buque IS NOT NULL").fetchall())
+    def fuzzy_match(name, name_set):
+        if not name:
+            return False
+        if name in name_set:
+            return True
+        for s in name_set:
+            if s and (s in name or name in s):
+                return True
+        return False
+
     result = []
     for row in rows:
         d = dict(row)
         booking = str(d.get("booking") or "").strip()
         buque = str(d.get("buque") or "").strip().upper()
-def fuzzy_match(name, name_set):
-            if name in name_set:
-                return True
-            for s in name_set:
-                if s and (s in name or name in s):
-                    return True
-            return False
         d["tiene_solicitud"] = booking in sol_bookings or fuzzy_match(buque, sol_buques)
         d["tiene_pe"] = fuzzy_match(buque, pe_buques)
         result.append(d)
