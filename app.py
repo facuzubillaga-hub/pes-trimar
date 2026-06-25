@@ -565,9 +565,15 @@ def plan_confirm():
     inserted = 0
     skipped = 0
     for row in rows:
+        # Check duplicate by booking + consignee + fecha_carga combination
         booking = row.get("booking")
-        if booking:
-            exists = db.execute("SELECT 1 FROM plan_cargas WHERE booking=?", (booking,)).fetchone()
+        consignee = row.get("consignee")
+        fecha_carga = row.get("fecha_carga")
+        if booking and consignee and fecha_carga:
+            exists = db.execute(
+                "SELECT 1 FROM plan_cargas WHERE booking=? AND consignee=? AND fecha_carga=?",
+                (booking, consignee, fecha_carga)
+            ).fetchone()
             if exists:
                 skipped += 1
                 continue
