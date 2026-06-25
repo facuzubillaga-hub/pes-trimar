@@ -431,13 +431,11 @@ def list_solicitudes():
     result = []
     for row in rows:
         d = dict(row)
-        djve_sol = str(d.get("djve") or "").strip()
+djve_sol = str(d.get("djve") or "").strip()
         cant_sol = str(d.get("cantidad_tn") or "").strip()
         tiene_pe = False
         if djve_sol and cant_sol:
             tiene_pe = bool(db.execute("SELECT 1 FROM permisos WHERE djve=? AND CAST(toneladas AS INTEGER)=CAST(? AS INTEGER)", (djve_sol, cant_sol)).fetchone())
-        if not tiene_pe and djve_sol:
-            tiene_pe = djve_sol in pe_djves
         d["tiene_pe"] = tiene_pe
         result.append(d)
     return jsonify(result)
