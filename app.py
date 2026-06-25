@@ -431,7 +431,7 @@ def list_solicitudes():
     result = []
     for row in rows:
         d = dict(row)
-djve_sol = str(d.get("djve") or "").strip()
+        djve_sol = str(d.get("djve") or "").strip()
         cant_sol = str(d.get("cantidad_tn") or "").strip()
         tiene_pe = False
         if djve_sol and cant_sol:
