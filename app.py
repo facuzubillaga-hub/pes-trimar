@@ -303,7 +303,7 @@ def upload():
     data["already_exists"] = exists is not None
     djve = str(data.get("djve") or "").strip()
     buque = str(data.get("buque") or "").strip().upper()
-toneladas = str(data.get("toneladas") or "").strip()
+    toneladas = str(data.get("toneladas") or "").strip()
     sol = None
     if djve and toneladas:
         sol = db.execute("SELECT booking, buque, fecha_solicitud FROM solicitudes WHERE djve=? AND CAST(cantidad_tn AS INTEGER)=CAST(? AS INTEGER)", (djve, toneladas)).fetchone()
@@ -330,13 +330,12 @@ def confirm():
 @app.route("/list")
 def list_pes():
     db = get_db()
-    rows = db.execute("SELECT nro_pe, buque, pais_destino, fecha_oficializacion, djve FROM permisos ORDER BY fecha_oficializacion DESC, nro_pe DESC").fetchall()
+    rows = db.execute("SELECT nro_pe, buque, pais_destino, fecha_oficializacion, djve, toneladas FROM permisos ORDER BY fecha_oficializacion DESC, nro_pe DESC").fetchall()
     result = []
     for row in rows:
         d = dict(row)
         djve = str(d.get("djve") or "").strip()
-        buque = str(d.get("buque") or "").strip().upper()
-      toneladas = str(d.get("toneladas") or "").strip()
+        toneladas = str(d.get("toneladas") or "").strip()
         sol = None
         if djve and toneladas:
             sol = db.execute("SELECT booking FROM solicitudes WHERE djve=? AND CAST(cantidad_tn AS INTEGER)=CAST(? AS INTEGER)", (djve, toneladas)).fetchone()
@@ -393,7 +392,7 @@ def list_solicitudes():
     result = []
     for row in rows:
         d = dict(row)
-         djve_sol = str(d.get("djve") or "").strip()
+        djve_sol = str(d.get("djve") or "").strip()
         cant_sol = str(d.get("cantidad_tn") or "").strip()
         tiene_pe = False
         if djve_sol and cant_sol:
