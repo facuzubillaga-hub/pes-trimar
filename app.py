@@ -380,6 +380,13 @@ def solicitud_delete(sol_id):
     db.commit()
     return jsonify({"ok": True})
 
+@app.route("/pe/delete/<nro>", methods=["DELETE"])
+def pe_delete(nro):
+    db = get_db()
+    db.execute("DELETE FROM permisos WHERE nro_pe=?", (nro,))
+    db.commit()
+    return jsonify({"ok": True})
+
 @app.route("/download")
 def download():
     db = get_db()
