@@ -394,3 +394,10 @@ with app.app_context():
 if __name__ == "__main__":
     print("✅ App corriendo en http://localhost:5000")
     app.run(debug=False, port=5000)
+
+@app.route("/pe/delete/<nro>", methods=["DELETE"])
+def pe_delete(nro):
+    db = get_db()
+    db.execute("DELETE FROM permisos WHERE nro_pe=?", (nro,))
+    db.commit()
+    return jsonify({"ok": True})
