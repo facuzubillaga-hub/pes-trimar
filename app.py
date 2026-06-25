@@ -511,6 +511,37 @@ def dashboard():
         "ultimas_sol": ultimas_sol
     })
 
+
+@app.route("/search")
+def search():
+    q = request.args.get("q", "").strip()
+    if not q or len(q) < 2:
+        return jsonify({"pes": [], "solicitudes": [], "plan": []})
+    db = get_db()
+    like = f"%{q.upper()}%"
+
+    pes = [dict(r) for r in db.execute(f"""
+        SELECT {','.join(FIELDS_PE)} FROM permisos
+        WHERE UPPER(nro_pe) LIKE ? OR UPPER(buque) LIKE ? OR UPPER(djve) LIKE ?
+        OR UPPER(pais_destino) LIKE ?
+        ORDER BY fecha_oficializacion DESC LIMIT 20
+    """, (like, like, like, like)).fetchall()]
+
+    solicitudes = [dict(r) for r in db.execute(f"""
+        SELECT {','.join(FIELDS_SOL)}, id FROM solicitudes
+        WHERE UPPER(buque) LIKE ? OR UPPER(booking) LIKE ? OR UPPER(djve) LIKE ?
+        OR UPPER(destino) LIKE ?
+        ORDER BY fecha_solicitud DESC LIMIT 20
+    """, (like, like, like, like)).fetchall()]
+
+    plan = [dict(r) for r in db.execute(f"""
+        SELECT {','.join(FIELDS_PC)}, id FROM plan_cargas
+        WHERE UPPER(buque) LIKE ? OR UPPER(booking) LIKE ? OR UPPER(pod) LIKE ?
+        ORDER BY etd DESC LIMIT 20
+    """, (like, like, like)).fetchall()]
+
+    return jsonify({"pes": pes, "solicitudes": solicitudes, "plan": plan})
+
 # ---------- Routes Plan de Cargas ----------
 
 @app.route("/plan/upload", methods=["POST"])
