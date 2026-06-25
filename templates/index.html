@@ -269,7 +269,6 @@ function fetchFromGmail(tipo) {
       }
       resultEl.innerHTML = html;
       if(tipo==='pe') loadPEList(); else loadSolList();
-loadDashboard();
     }).catch(e => { loaderEl.style.display='none'; resultEl.innerHTML=`<div class="alert alert-danger">❌ ${e.message}</div>`; });
 }
 
@@ -383,13 +382,65 @@ function syncFields(prefix,labels,obj){Object.keys(labels).forEach(key=>{const e
 // ---- Init ----
 checkGmailStatus();
 loadPEList();
-loadDashboard();
 
 // Handle OAuth redirect
 if(new URLSearchParams(window.location.search).get('gmail')==='ok'){
   history.replaceState({},'','/');
   checkGmailStatus();
 }
+
+// ==================== Dashboard ====================
+function loadDashboard() {
+  fetch('/dashboard').then(r=>r.json()).then(d=>{
+    const el = document.getElementById('dash-content');
+    if(!el) return;
+    let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+      ${[
+        {label:'PEs Registrados', val:d.total_pes, color:'#1F4E79', icon:'📋'},
+        {label:'Solicitudes Bunge', val:d.total_sol, color:'#217346', icon:'📥'},
+        {label:'Pendientes de PE', val:d.sol_sin_pe, color: d.sol_sin_pe>0?'#c0392b':'#217346', icon:'⏳'},
+        {label:'Plan de Cargas', val:d.total_plan, color:'#7B3F00', icon:'📦'}
+      ].map(s=>`<div style="background:white;border-radius:8px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.08);border-left:4px solid ${s.color}">
+        <div style="font-size:0.78rem;color:#666;margin-bottom:4px">${s.icon} ${s.label}</div>
+        <div style="font-size:1.8rem;font-weight:700;color:${s.color}">${s.val}</div>
+      </div>`).join('')}
+    </div>`;
+
+    if(d.pes_vencer && d.pes_vencer.length) {
+      html += `<div style="background:white;border-radius:8px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.08);margin-bottom:14px">
+        <h3 style="font-size:0.9rem;color:#c0392b;margin-bottom:10px">⚠️ PEs con vencimiento próximo o vencidos</h3>
+        <table class="dt"><thead><tr><th>Nº PE</th><th>Buque</th><th>Destino</th><th>Vto. Embarque</th><th>Estado</th></tr></thead><tbody>
+        ${d.pes_vencer.map(p=>`<tr>
+          <td><strong>${p.nro_pe}</strong></td><td>${p.buque}</td><td>${p.pais_destino}</td><td>${p.vto_embarque}</td>
+          <td><span class="badge" style="${p.dias<0?'background:#f8d7da;color:#842029':'background:#fff3cd;color:#856404'}">${p.dias<0?'⛔ Vencido hace '+Math.abs(p.dias)+' días':'⚠️ Vence en '+p.dias+' días'}</span></td>
+        </tr>`).join('')}
+        </tbody></table></div>`;
+    }
+
+    html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div style="background:white;border-radius:8px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+        <h3 style="font-size:0.9rem;color:#1F4E79;margin-bottom:10px">📋 Últimos PEs cargados</h3>
+        <table class="dt"><thead><tr><th>Nº PE</th><th>Buque</th><th>Fecha</th></tr></thead><tbody>
+        ${d.ultimos_pes.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.buque}</td><td>${p.fecha_oficializacion}</td></tr>`).join('')}
+        </tbody></table>
+      </div>
+      <div style="background:white;border-radius:8px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+        <h3 style="font-size:0.9rem;color:#217346;margin-bottom:10px">📥 Últimas solicitudes</h3>
+        <table class="dt"><thead><tr><th>Buque</th><th>Tn</th><th>Fecha</th></tr></thead><tbody>
+        ${d.ultimas_sol.map(s=>`<tr><td>${s.buque}</td><td>${s.cantidad_tn}</td><td>${s.fecha_solicitud}</td></tr>`).join('')}
+        </tbody></table>
+      </div>
+    </div>`;
+
+    el.innerHTML = html;
+  }).catch(e => {
+    const el = document.getElementById('dash-content');
+    if(el) el.innerHTML = '<span class="empty-msg">Error cargando dashboard</span>';
+  });
+}
+
+loadDashboard();
+
 </script>
 </body>
 </html>
