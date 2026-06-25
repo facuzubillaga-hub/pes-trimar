@@ -448,6 +448,69 @@ def solicitud_delete(sol_id):
     db.commit()
     return jsonify({"ok": True})
 
+
+@app.route("/dashboard")
+def dashboard():
+    db = get_db()
+    from datetime import datetime, timedelta
+
+    total_pes = db.execute("SELECT COUNT(*) FROM permisos").fetchone()[0]
+    total_sol = db.execute("SELECT COUNT(*) FROM solicitudes").fetchone()[0]
+    total_plan = db.execute("SELECT COUNT(*) FROM plan_cargas").fetchone()[0]
+
+    # Solicitudes sin PE
+    sol_rows = db.execute(f"SELECT {','.join(FIELDS_SOL)} FROM solicitudes").fetchall()
+    pe_djves = set(str(r[0] or "").strip() for r in db.execute("SELECT djve FROM permisos WHERE djve IS NOT NULL").fetchall())
+    sol_sin_pe = 0
+    for row in sol_rows:
+        djve_sol = str(row["djve"] or "").strip()
+        cant_sol = str(row["cantidad_tn"] or "").strip()
+        tiene_pe = False
+        if djve_sol and cant_sol:
+            tiene_pe = bool(db.execute("SELECT 1 FROM permisos WHERE djve=? AND ROUND(CAST(toneladas AS REAL))=ROUND(CAST(? AS REAL))", (djve_sol, cant_sol)).fetchone())
+        if not tiene_pe and djve_sol:
+            tiene_pe = djve_sol in pe_djves
+        if not tiene_pe:
+            sol_sin_pe += 1
+
+    # PEs por vencer en 7 días o vencidos
+    today = datetime.today()
+    pes_vencer = []
+    for row in db.execute("SELECT nro_pe, buque, vto_embarque, pais_destino FROM permisos WHERE vto_embarque IS NOT NULL").fetchall():
+        vto = row["vto_embarque"]
+        if not vto:
+            continue
+        try:
+            d = datetime.strptime(vto, "%d/%m/%Y")
+            diff = (d - today).days
+            if diff <= 7:
+                pes_vencer.append({
+                    "nro_pe": row["nro_pe"],
+                    "buque": row["buque"],
+                    "vto_embarque": vto,
+                    "pais_destino": row["pais_destino"],
+                    "dias": diff
+                })
+        except:
+            pass
+    pes_vencer.sort(key=lambda x: x["dias"])
+
+    # Últimos 5 PEs
+    ultimos_pes = [dict(r) for r in db.execute("SELECT nro_pe, buque, fecha_oficializacion, pais_destino FROM permisos ORDER BY fecha_oficializacion DESC, nro_pe DESC LIMIT 5").fetchall()]
+
+    # Últimas 5 solicitudes
+    ultimas_sol = [dict(r) for r in db.execute("SELECT buque, producto, cantidad_tn, djve, fecha_solicitud FROM solicitudes ORDER BY id DESC LIMIT 5").fetchall()]
+
+    return jsonify({
+        "total_pes": total_pes,
+        "total_sol": total_sol,
+        "total_plan": total_plan,
+        "sol_sin_pe": sol_sin_pe,
+        "pes_vencer": pes_vencer,
+        "ultimos_pes": ultimos_pes,
+        "ultimas_sol": ultimas_sol
+    })
+
 # ---------- Routes Plan de Cargas ----------
 
 @app.route("/plan/upload", methods=["POST"])
@@ -500,13 +563,36 @@ def plan_list():
                 return True
         return False
 
+    # Build booking → tiene_pe map from solicitudes
+    sol_rows_full = db.execute("SELECT booking, djve, cantidad_tn FROM solicitudes WHERE booking IS NOT NULL").fetchall()
+    booking_tiene_pe = {}
+    for sol in sol_rows_full:
+        bk = str(sol["booking"] or "").strip()
+        if not bk:
+            continue
+        djve = str(sol["djve"] or "").strip()
+        cant = str(sol["cantidad_tn"] or "").strip()
+        tiene_pe = False
+        if djve and cant:
+            tiene_pe = bool(db.execute(
+                "SELECT 1 FROM permisos WHERE djve=? AND ROUND(CAST(toneladas AS REAL))=ROUND(CAST(? AS REAL))",
+                (djve, cant)).fetchone())
+        if not tiene_pe and djve:
+            tiene_pe = bool(db.execute("SELECT 1 FROM permisos WHERE djve=?", (djve,)).fetchone())
+        booking_tiene_pe[bk] = tiene_pe
+
     result = []
     for row in rows:
         d = dict(row)
         booking = str(d.get("booking") or "").strip()
         buque = str(d.get("buque") or "").strip().upper()
-        d["tiene_solicitud"] = booking in sol_bookings or fuzzy_match(buque, sol_buques)
-        d["tiene_pe"] = fuzzy_match(buque, pe_buques)
+        # Primary: booking → solicitud → PE chain
+        if booking and booking in booking_tiene_pe:
+            d["tiene_solicitud"] = True
+            d["tiene_pe"] = booking_tiene_pe[booking]
+        else:
+            d["tiene_solicitud"] = booking in sol_bookings or fuzzy_match(buque, sol_buques)
+            d["tiene_pe"] = fuzzy_match(buque, pe_buques)
         result.append(d)
     return jsonify(result)
 
