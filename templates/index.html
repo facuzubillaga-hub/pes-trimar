@@ -249,7 +249,11 @@ function uploadPE(file){
     document.getElementById('pe-loader').style.display='none';
     if(data.error){alert('Error: '+data.error);return;}
     peData=data;showPreview('pe',data,PE_LABELS);
-    if(data.already_exists) document.getElementById('pe-alert').innerHTML=`<div class="alert alert-warning">⚠️ El PE <strong>${data.nro_pe}</strong> ya existe.</div>`;
+    let alertHtml='';
+    if(data.already_exists) alertHtml+=`<div class="alert alert-warning">⚠️ El PE <strong>${data.nro_pe}</strong> ya existe.</div>`;
+    if(data.solicitud_match) alertHtml+=`<div class="alert alert-success">🔗 Solicitud Bunge encontrada — Buque: <strong>${data.solicitud_match.buque}</strong> · Booking: <strong>${data.solicitud_match.booking||'sin booking'}</strong> · Fecha: ${data.solicitud_match.fecha_solicitud}</div>`;
+    else alertHtml+=`<div class="alert alert-info">ℹ️ No se encontró solicitud Bunge asociada.</div>`;
+    document.getElementById('pe-alert').innerHTML=alertHtml;
   }).catch(e=>{document.getElementById('pe-loader').style.display='none';alert('Error: '+e.message)});
 }
 function confirmPE(){
@@ -265,6 +269,7 @@ function confirmPE(){
     }).catch(e=>{btn.disabled=false;document.getElementById('pe-status').textContent='Error: '+e.message});
 }
 function resetPE(){document.getElementById('pe-preview').style.display='none';document.getElementById('pe-file').value='';peData=null;}
+function deletePE(nro){if(!confirm('¿Eliminar PE '+nro+'?'))return;fetch(`/pe/delete/${encodeURIComponent(nro)}`,{method:'DELETE'}).then(()=>loadPEList());}
 function loadPEList(){
   fetch('/list').then(r=>r.json()).then(list=>{
     const el=document.getElementById('pe-list');
