@@ -5,188 +5,344 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gestor de PEs — Trimar</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; background: #f0f4f8; color: #1a2a3a; min-height: 100vh; }
-  header { background: #1F4E79; color: white; padding: 18px 32px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-  header h1 { font-size: 1.2rem; font-weight: 700; }
-  header span { font-size: 0.85rem; opacity: 0.75; }
-  .container { max-width: 960px; margin: 32px auto; padding: 0 20px; }
-  .card { background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); padding: 28px 32px; margin-bottom: 24px; }
-  .card h2 { font-size: 1rem; color: #1F4E79; margin-bottom: 18px; border-bottom: 2px solid #BDD7EE; padding-bottom: 10px; }
-  .drop-zone { border: 2px dashed #BDD7EE; border-radius: 8px; padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.2s; background: #f7fbff; }
-  .drop-zone:hover, .drop-zone.drag-over { border-color: #1F4E79; background: #e8f0fb; }
-  .drop-zone p { color: #555; font-size: 0.9rem; }
-  .drop-zone p strong { color: #1F4E79; }
-  #file-input { display: none; }
-  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s; text-decoration: none; }
-  .btn-primary { background: #1F4E79; color: white; }
-  .btn-primary:hover { background: #163a5f; }
-  .btn-success { background: #217346; color: white; }
-  .btn-success:hover { background: #185a36; }
-  .btn-outline { background: white; color: #1F4E79; border: 2px solid #1F4E79; }
-  .btn-outline:hover { background: #e8f0fb; }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .loader { display: none; text-align: center; padding: 30px; }
-  .spinner { width: 40px; height: 40px; border: 4px solid #BDD7EE; border-top-color: #1F4E79; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  #preview-section { display: none; }
-  .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-bottom: 20px; }
-  .field-group { display: flex; flex-direction: column; gap: 4px; }
-  .field-group label { font-size: 0.75rem; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-  .field-group input { border: 1px solid #d0d9e3; border-radius: 5px; padding: 7px 10px; font-size: 0.9rem; background: #fafcff; transition: border 0.15s; }
-  .field-group input:focus { outline: none; border-color: #1F4E79; }
-  .field-group input.changed { border-color: #e67e22; background: #fff8f0; }
-  .alert { padding: 12px 16px; border-radius: 6px; font-size: 0.88rem; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-  .alert-warning { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
-  .alert-danger  { background: #f8d7da; color: #842029; border: 1px solid #f5c2c7; }
-  .alert-success { background: #d1e7dd; color: #0a3622; border: 1px solid #a3cfbb; }
-  .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
-  .pe-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  .pe-table th { background: #1F4E79; color: white; padding: 8px 12px; text-align: left; font-weight: 600; }
-  .pe-table td { padding: 7px 12px; border-bottom: 1px solid #e8f0fb; }
-  .pe-table tr:nth-child(even) td { background: #f7fbff; }
-  .pe-table tr:hover td { background: #e8f0fb; }
-  .empty-list { color: #999; font-style: italic; font-size: 0.9rem; }
-  footer { text-align: center; color: #aaa; font-size: 0.78rem; padding: 24px 0 40px; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;background:#f0f4f8;color:#1a2a3a;min-height:100vh}
+  header{background:#1F4E79;color:white;padding:16px 30px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+  header h1{font-size:1.15rem;font-weight:700}
+  header span{font-size:0.82rem;opacity:0.75}
+  .gmail-bar{background:#e8f0fb;border-bottom:2px solid #BDD7EE;padding:10px 30px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:0.85rem}
+  .gmail-bar strong{color:#1F4E79}
+  .container{max-width:980px;margin:24px auto;padding:0 18px}
+  .tabs{display:flex;gap:4px}
+  .tab-btn{padding:10px 26px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;background:#d0dce8;color:#3a5068;transition:all 0.15s}
+  .tab-btn.active{background:white;color:#1F4E79;border-bottom:3px solid #1F4E79}
+  .tab-content{display:none}.tab-content.active{display:block}
+  .card{background:white;border-radius:0 8px 8px 8px;box-shadow:0 2px 10px rgba(0,0,0,0.08);padding:24px 28px;margin-bottom:18px}
+  .card-inner{background:white;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.08);padding:24px 28px;margin-bottom:18px}
+  .card h2,.card-inner h2{font-size:0.97rem;color:#1F4E79;margin-bottom:14px;border-bottom:2px solid #BDD7EE;padding-bottom:8px}
+  .drop-zone{border:2px dashed #BDD7EE;border-radius:8px;padding:32px 18px;text-align:center;cursor:pointer;transition:all 0.2s;background:#f7fbff}
+  .drop-zone:hover,.drop-zone.drag-over{border-color:#1F4E79;background:#e8f0fb}
+  .drop-zone p{color:#555;font-size:0.88rem}.drop-zone p strong{color:#1F4E79}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:6px;font-size:0.86rem;font-weight:600;border:none;cursor:pointer;transition:all 0.15s;text-decoration:none}
+  .btn-primary{background:#1F4E79;color:white}.btn-primary:hover{background:#163a5f}
+  .btn-success{background:#217346;color:white}.btn-success:hover{background:#185a36}
+  .btn-outline{background:white;color:#1F4E79;border:2px solid #1F4E79}.btn-outline:hover{background:#e8f0fb}
+  .btn-gmail{background:#EA4335;color:white}.btn-gmail:hover{background:#c5372c}
+  .btn-danger{background:#c0392b;color:white}.btn-danger:hover{background:#a93226}
+  .btn:disabled{opacity:0.5;cursor:not-allowed}
+  .btn-sm{padding:5px 11px;font-size:0.76rem}
+  .loader{display:none;text-align:center;padding:26px}
+  .spinner{width:36px;height:36px;border:4px solid #BDD7EE;border-top-color:#1F4E79;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 10px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .preview-section{display:none}
+  .preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;margin-bottom:16px}
+  .field-group{display:flex;flex-direction:column;gap:3px}
+  .field-group label{font-size:0.7rem;color:#666;font-weight:700;text-transform:uppercase;letter-spacing:0.4px}
+  .field-group input{border:1px solid #d0d9e3;border-radius:5px;padding:6px 9px;font-size:0.86rem;background:#fafcff;transition:border 0.15s}
+  .field-group input:focus{outline:none;border-color:#1F4E79}
+  .field-group input.changed{border-color:#e67e22;background:#fff8f0}
+  .alert{padding:10px 14px;border-radius:6px;font-size:0.84rem;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .alert-warning{background:#fff3cd;color:#856404;border:1px solid #ffc107}
+  .alert-danger{background:#f8d7da;color:#842029;border:1px solid #f5c2c7}
+  .alert-success{background:#d1e7dd;color:#0a3622;border:1px solid #a3cfbb}
+  .alert-info{background:#cff4fc;color:#055160;border:1px solid #9eeaf9}
+  .actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:6px}
+  table.dt{width:100%;border-collapse:collapse;font-size:0.82rem}
+  table.dt th{background:#1F4E79;color:white;padding:8px 10px;text-align:left;font-weight:600;white-space:nowrap}
+  table.dt td{padding:7px 10px;border-bottom:1px solid #e8f0fb;vertical-align:middle}
+  table.dt tr:nth-child(even) td{background:#f7fbff}
+  table.dt tr:hover td{background:#e8f0fb}
+  .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:0.74rem;font-weight:700}
+  .badge-ok{background:#d1e7dd;color:#0a3622}
+  .badge-pending{background:#fff3cd;color:#856404}
+  .toolbar{display:flex;gap:9px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .divider{width:1px;height:24px;background:#d0d9e3;margin:0 4px}
+  .empty-msg{color:#999;font-style:italic;font-size:0.86rem;padding:10px 0}
+  .gmail-result{margin-top:10px;font-size:0.84rem}
+  footer{text-align:center;color:#aaa;font-size:0.74rem;padding:18px 0 32px}
 </style>
 </head>
 <body>
+
 <header>
-  <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-  <div>
-    <h1>Gestor de Permisos de Exportación</h1>
-    <span>Agencia Trimar S.A. — Puerto Quequén</span>
-  </div>
+  <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+  <div><h1>Gestor de Permisos de Exportación</h1><span>Agencia Trimar S.A. — Puerto Quequén</span></div>
 </header>
 
+<!-- Gmail status bar -->
+<div class="gmail-bar" id="gmail-bar">
+  <span id="gmail-status-text">⏳ Verificando conexión Gmail...</span>
+  <div id="gmail-actions"></div>
+</div>
+
 <div class="container">
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('pes',this)">📋 Permisos de Exportación</button>
+    <button class="tab-btn" onclick="switchTab('sol',this)">📥 Solicitudes Bunge</button>
+  </div>
 
-  <div class="card">
-    <h2>📄 Cargar nuevo PE</h2>
-    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
-      <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="#1F4E79" stroke-width="1.5" style="margin-bottom:12px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
-      <p><strong>Hacé click o arrastrá el PDF</strong> del Permiso de Exportación aquí</p>
-      <p style="margin-top:6px; font-size:0.8rem; color:#999;">Solo archivos .pdf — se procesa con IA automáticamente</p>
+  <!-- TAB PEs -->
+  <div id="tab-pes" class="tab-content active">
+    <div class="card">
+      <h2>📄 Cargar PE</h2>
+      <div class="toolbar">
+        <button class="btn btn-gmail" id="btn-gmail-pe" onclick="fetchFromGmail('pe')" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+          Revisar Gmail (despachante)
+        </button>
+        <div class="divider"></div>
+        <span style="font-size:0.82rem;color:#666">o subí el PDF manualmente:</span>
+      </div>
+      <div class="drop-zone" id="pe-drop" onclick="document.getElementById('pe-file').click()">
+        <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#1F4E79" stroke-width="1.5" style="margin-bottom:8px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        <p><strong>Hacé click o arrastrá el PDF</strong> del PE oficializado</p>
+        <p style="margin-top:4px;font-size:0.76rem;color:#999">Solo archivos .pdf</p>
+      </div>
+      <input type="file" id="pe-file" accept=".pdf" style="display:none">
+      <div class="gmail-result" id="gmail-result-pe"></div>
     </div>
-    <input type="file" id="file-input" accept=".pdf">
-  </div>
-
-  <div class="loader" id="loader">
-    <div class="spinner"></div>
-    <p style="color:#555;">Procesando PE con IA...</p>
-  </div>
-
-  <div class="card" id="preview-section">
-    <h2>✏️ Verificar y confirmar datos</h2>
-    <div id="alert-box"></div>
-    <div class="preview-grid" id="preview-grid"></div>
-    <div class="actions">
-      <button class="btn btn-success" id="btn-confirm" onclick="confirmPE()">
-        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
-        Confirmar y guardar
-      </button>
-      <button class="btn btn-outline" onclick="resetApp()">Cancelar</button>
-      <span id="status-msg" style="font-size:0.85rem; color:#555;"></span>
+    <div class="loader" id="pe-loader"><div class="spinner"></div><p style="color:#555">Procesando PE con IA...</p></div>
+    <div class="card-inner preview-section" id="pe-preview">
+      <h2>✏️ Verificar datos del PE</h2>
+      <div id="pe-alert"></div>
+      <div class="preview-grid" id="pe-grid"></div>
+      <div class="actions">
+        <button class="btn btn-success" id="pe-confirm-btn" onclick="confirmPE()">✔ Confirmar y guardar</button>
+        <button class="btn btn-outline" onclick="resetPE()">Cancelar</button>
+        <span id="pe-status" style="font-size:0.83rem;color:#555"></span>
+      </div>
+    </div>
+    <div class="card-inner">
+      <h2>📊 PEs registrados</h2>
+      <div class="toolbar">
+        <a href="/download" class="btn btn-success" download>⬇ Descargar Excel</a>
+        <button class="btn btn-outline" onclick="loadPEList()">↻ Actualizar</button>
+      </div>
+      <div id="pe-list"><span class="empty-msg">Cargando...</span></div>
     </div>
   </div>
 
-  <div class="card">
-    <h2>📊 PEs registrados</h2>
-    <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
-      <a href="/download" class="btn btn-success" download>
-        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 3v13.5m0 0l-4.5-4.5M12 16.5l4.5-4.5"/></svg>
-        Descargar Excel
-      </a>
-      <button class="btn btn-outline" onclick="loadList()">↻ Actualizar</button>
+  <!-- TAB Solicitudes -->
+  <div id="tab-sol" class="tab-content">
+    <div class="card">
+      <h2>📥 Cargar solicitud de Bunge</h2>
+      <div class="toolbar">
+        <button class="btn btn-gmail" id="btn-gmail-sol" onclick="fetchFromGmail('solicitud')" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+          Revisar Gmail (Bunge)
+        </button>
+        <div class="divider"></div>
+        <span style="font-size:0.82rem;color:#666">o subí el PDF manualmente:</span>
+      </div>
+      <div class="drop-zone" id="sol-drop" onclick="document.getElementById('sol-file').click()">
+        <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#1F4E79" stroke-width="1.5" style="margin-bottom:8px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        <p><strong>Hacé click o arrastrá el PDF</strong> de la solicitud de Bunge</p>
+        <p style="margin-top:4px;font-size:0.76rem;color:#999">Solo archivos .pdf</p>
+      </div>
+      <input type="file" id="sol-file" accept=".pdf" style="display:none">
+      <div class="gmail-result" id="gmail-result-sol"></div>
     </div>
-    <div id="pe-list"><span class="empty-list">Cargando...</span></div>
+    <div class="loader" id="sol-loader"><div class="spinner"></div><p style="color:#555">Procesando solicitud con IA...</p></div>
+    <div class="card-inner preview-section" id="sol-preview">
+      <h2>✏️ Verificar datos de la solicitud</h2>
+      <div id="sol-alert"></div>
+      <div class="preview-grid" id="sol-grid"></div>
+      <div class="actions">
+        <button class="btn btn-success" id="sol-confirm-btn" onclick="confirmSol()">✔ Confirmar y guardar</button>
+        <button class="btn btn-outline" onclick="resetSol()">Cancelar</button>
+        <span id="sol-status" style="font-size:0.83rem;color:#555"></span>
+      </div>
+    </div>
+    <div class="card-inner">
+      <h2>📋 Solicitudes registradas</h2>
+      <div class="toolbar">
+        <a href="/download" class="btn btn-success" download>⬇ Descargar Excel</a>
+        <button class="btn btn-outline" onclick="loadSolList()">↻ Actualizar</button>
+      </div>
+      <div id="sol-list"><span class="empty-msg">Cargando...</span></div>
+    </div>
   </div>
-
 </div>
 
 <footer>Trimar S.A. · Gestor de PEs · procesamiento vía Claude AI</footer>
 
 <script>
-let currentData = null;
-const dropZone = document.getElementById('drop-zone');
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if (f && f.type === 'application/pdf') uploadFile(f); });
-document.getElementById('file-input').addEventListener('change', e => { if (e.target.files[0]) uploadFile(e.target.files[0]); });
-
-function uploadFile(file) {
-  document.getElementById('preview-section').style.display = 'none';
-  document.getElementById('loader').style.display = 'block';
-  const fd = new FormData(); fd.append('pdf', file);
-  fetch('/upload', { method: 'POST', body: fd })
-    .then(r => r.json()).then(data => {
-      document.getElementById('loader').style.display = 'none';
-      if (data.error) { alert('Error: ' + data.error); return; }
-      currentData = data; showPreview(data);
-    }).catch(err => { document.getElementById('loader').style.display = 'none'; alert('Error: ' + err.message); });
+// ---- Tabs ----
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='sol') loadSolList();
 }
 
-const FIELD_LABELS = {
-  nro_pe:"Nº PE", fecha_oficializacion:"Fecha Oficialización", buque:"Buque", bandera:"Bandera",
-  pais_destino:"País Destino", mercaderia:"Mercadería", posicion_arancelaria:"Posición Arancelaria",
-  cond_venta:"Cond. Venta", peso_bruto_kg:"Peso Bruto (kg)", toneladas:"Toneladas",
-  fob_total_usd:"FOB Total (USD)", flete_usd:"Flete (USD)", precio_unit_usd_tn:"Precio Unit. (USD/Tn)",
-  precio_oficial_usd_tn:"Precio Oficial (USD/Tn)", djve:"DJVE", fecha_cierre_vta:"Fecha Cierre Vta.",
-  vto_embarque:"Vto. Embarque", ant_gan_usd:"Ant. Gan. (USD)", cotizacion:"Cotización"
-};
-
-function showPreview(data) {
-  const grid = document.getElementById('preview-grid');
-  const alertBox = document.getElementById('alert-box');
-  grid.innerHTML = ''; alertBox.innerHTML = '';
-  if (data.already_exists) alertBox.innerHTML = `<div class="alert alert-warning">⚠️ El PE <strong>${data.nro_pe}</strong> ya existe. Verificá antes de confirmar.</div>`;
-  Object.keys(FIELD_LABELS).forEach(key => {
-    const div = document.createElement('div'); div.className = 'field-group';
-    const label = document.createElement('label'); label.textContent = FIELD_LABELS[key];
-    const input = document.createElement('input'); input.type = 'text'; input.id = 'field_' + key;
-    input.value = data[key] !== null && data[key] !== undefined ? data[key] : '';
-    input.addEventListener('input', () => { input.classList.add('changed'); currentData[key] = input.value; });
-    div.appendChild(label); div.appendChild(input); grid.appendChild(div);
-  });
-  document.getElementById('preview-section').style.display = 'block';
-  document.getElementById('status-msg').textContent = '';
-  document.getElementById('preview-section').scrollIntoView({ behavior: 'smooth' });
-}
-
-function confirmPE() {
-  const btn = document.getElementById('btn-confirm');
-  const msg = document.getElementById('status-msg');
-  btn.disabled = true; msg.textContent = 'Guardando...';
-  Object.keys(FIELD_LABELS).forEach(key => {
-    const el = document.getElementById('field_' + key);
-    if (el) currentData[key] = el.value;
-  });
-  delete currentData.already_exists;
-  fetch('/confirm', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(currentData) })
-    .then(r => r.json()).then(res => {
-      btn.disabled = false;
-      if (res.error) { document.getElementById('alert-box').innerHTML = `<div class="alert alert-danger">❌ ${res.error}</div>`; msg.textContent = ''; return; }
-      document.getElementById('alert-box').innerHTML = `<div class="alert alert-success">✅ PE <strong>${res.nro_pe}</strong> guardado correctamente.</div>`;
-      msg.textContent = ''; loadList(); setTimeout(resetApp, 3000);
-    }).catch(err => { btn.disabled = false; msg.textContent = 'Error: ' + err.message; });
-}
-
-function resetApp() {
-  document.getElementById('preview-section').style.display = 'none';
-  document.getElementById('file-input').value = ''; currentData = null;
-}
-
-function loadList() {
-  fetch('/list').then(r => r.json()).then(list => {
-    const el = document.getElementById('pe-list');
-    if (!list.length) { el.innerHTML = '<span class="empty-list">No hay PEs registrados aún</span>'; return; }
-    el.innerHTML = `<table class="pe-table">
-      <thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th></tr></thead>
-      <tbody>${list.map(p => `<tr><td><strong>${p.nro_pe}</strong></td><td>${p.fecha_oficializacion}</td><td>${p.buque}</td><td>${p.pais_destino}</td></tr>`).join('')}</tbody>
-    </table>`;
+// ---- Gmail status ----
+function checkGmailStatus() {
+  fetch('/gmail/status').then(r=>r.json()).then(s => {
+    const bar = document.getElementById('gmail-status-text');
+    const actions = document.getElementById('gmail-actions');
+    if(s.connected) {
+      bar.innerHTML = '✅ <strong>Gmail conectado</strong> — trimar@trimar.com.ar';
+      actions.innerHTML = `<button class="btn btn-outline btn-sm" onclick="disconnectGmail()">Desconectar</button>`;
+      document.getElementById('btn-gmail-pe').disabled = false;
+      document.getElementById('btn-gmail-sol').disabled = false;
+    } else {
+      bar.innerHTML = '⚠️ Gmail no conectado';
+      actions.innerHTML = `<a href="/gmail/auth" class="btn btn-gmail btn-sm">Conectar Gmail</a>`;
+    }
   });
 }
-loadList();
+
+function disconnectGmail() {
+  if(!confirm('¿Desconectar Gmail?')) return;
+  fetch('/gmail/disconnect').then(()=>checkGmailStatus());
+}
+
+// ---- Gmail fetch ----
+function fetchFromGmail(tipo) {
+  const resultEl = document.getElementById(`gmail-result-${tipo==='pe'?'pe':'sol'}`);
+  const loaderEl = document.getElementById(`${tipo==='pe'?'pe':'sol'}-loader`);
+  resultEl.innerHTML = '<span style="color:#555">🔍 Buscando mails nuevos...</span>';
+  loaderEl.style.display = 'block';
+  fetch(`/gmail/fetch/${tipo}`, {method:'POST'})
+    .then(r=>r.json()).then(res => {
+      loaderEl.style.display = 'none';
+      if(res.error) { resultEl.innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`; return; }
+      if(res.found === 0) {
+        resultEl.innerHTML = `<div class="alert alert-info">📭 No hay mails nuevos con PDF adjunto.</div>`; return;
+      }
+      let html = '';
+      if(res.processed.length) {
+        html += `<div class="alert alert-success">✅ <strong>${res.processed.length}</strong> PDF${res.processed.length>1?'s':''} procesado${res.processed.length>1?'s':''} y guardado${res.processed.length>1?'s':''}:<br>`;
+        html += res.processed.map(p=>`&nbsp;• ${p.filename} — <em>${p.subject}</em>`).join('<br>');
+        html += '</div>';
+      }
+      if(res.skipped.length) {
+        html += `<div class="alert alert-warning">⚠️ <strong>${res.skipped.length}</strong> omitido${res.skipped.length>1?'s':''}:<br>`;
+        html += res.skipped.map(p=>`&nbsp;• ${p.filename}: ${p.reason}`).join('<br>');
+        html += '</div>';
+      }
+      resultEl.innerHTML = html;
+      if(tipo==='pe') loadPEList(); else loadSolList();
+    }).catch(e => { loaderEl.style.display='none'; resultEl.innerHTML=`<div class="alert alert-danger">❌ ${e.message}</div>`; });
+}
+
+// ---- Drop & file ----
+function setupDrop(zoneId, fileId, handler) {
+  const zone = document.getElementById(zoneId);
+  zone.addEventListener('dragover', e=>{e.preventDefault();zone.classList.add('drag-over')});
+  zone.addEventListener('dragleave', ()=>zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e=>{e.preventDefault();zone.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f&&f.type==='application/pdf')handler(f)});
+  document.getElementById(fileId).addEventListener('change', e=>{if(e.target.files[0])handler(e.target.files[0])});
+}
+
+// ==================== PEs ====================
+let peData = null;
+const PE_LABELS = {nro_pe:"Nº PE",fecha_oficializacion:"Fecha Oficialización",buque:"Buque",bandera:"Bandera",pais_destino:"País Destino",mercaderia:"Mercadería",posicion_arancelaria:"Posición Arancelaria",cond_venta:"Cond. Venta",peso_bruto_kg:"Peso Bruto (kg)",toneladas:"Toneladas",fob_total_usd:"FOB Total (USD)",flete_usd:"Flete (USD)",precio_unit_usd_tn:"Precio Unit. (USD/Tn)",precio_oficial_usd_tn:"Precio Oficial (USD/Tn)",djve:"DJVE",fecha_cierre_vta:"Fecha Cierre Vta.",vto_embarque:"Vto. Embarque",ant_gan_usd:"Ant. Gan. (USD)",cotizacion:"Cotización"};
+
+setupDrop('pe-drop','pe-file',uploadPE);
+function uploadPE(file){
+  document.getElementById('pe-preview').style.display='none';
+  document.getElementById('pe-loader').style.display='block';
+  const fd=new FormData();fd.append('pdf',file);
+  fetch('/upload',{method:'POST',body:fd}).then(r=>r.json()).then(data=>{
+    document.getElementById('pe-loader').style.display='none';
+    if(data.error){alert('Error: '+data.error);return;}
+    peData=data;showPreview('pe',data,PE_LABELS);
+    if(data.already_exists) document.getElementById('pe-alert').innerHTML=`<div class="alert alert-warning">⚠️ El PE <strong>${data.nro_pe}</strong> ya existe.</div>`;
+  }).catch(e=>{document.getElementById('pe-loader').style.display='none';alert('Error: '+e.message)});
+}
+function confirmPE(){
+  const btn=document.getElementById('pe-confirm-btn');
+  btn.disabled=true;document.getElementById('pe-status').textContent='Guardando...';
+  syncFields('pe',PE_LABELS,peData);delete peData.already_exists;
+  fetch('/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(peData)})
+    .then(r=>r.json()).then(res=>{
+      btn.disabled=false;
+      if(res.error){document.getElementById('pe-alert').innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`;document.getElementById('pe-status').textContent='';return;}
+      document.getElementById('pe-alert').innerHTML=`<div class="alert alert-success">✅ PE <strong>${res.nro_pe}</strong> guardado.</div>`;
+      document.getElementById('pe-status').textContent='';loadPEList();setTimeout(resetPE,3000);
+    }).catch(e=>{btn.disabled=false;document.getElementById('pe-status').textContent='Error: '+e.message});
+}
+function resetPE(){document.getElementById('pe-preview').style.display='none';document.getElementById('pe-file').value='';peData=null;}
+function loadPEList(){
+  fetch('/list').then(r=>r.json()).then(list=>{
+    const el=document.getElementById('pe-list');
+    if(!list.length){el.innerHTML='<span class="empty-msg">No hay PEs registrados aún</span>';return;}
+    el.innerHTML=`<table class="dt"><thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th></tr></thead><tbody>${list.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.fecha_oficializacion}</td><td>${p.buque}</td><td>${p.pais_destino}</td></tr>`).join('')}</tbody></table>`;
+  });
+}
+
+// ==================== Solicitudes ====================
+let solData=null;
+const SOL_LABELS={buque:"Buque",bandera:"Bandera",destino:"Destino",producto:"Producto",cantidad_tn:"Cantidad (Tn)",djve:"DJVE",contrato:"Contrato",cond_venta:"Cond. Venta",precio_fob_usd_tn:"Precio FOB (USD/Tn)",importe_total_usd:"Importe Total (USD)",fecha_solicitud:"Fecha Solicitud",fecha_vta:"Fecha Vta.",booking:"Booking"};
+
+setupDrop('sol-drop','sol-file',uploadSol);
+function uploadSol(file){
+  document.getElementById('sol-preview').style.display='none';
+  document.getElementById('sol-loader').style.display='block';
+  const fd=new FormData();fd.append('pdf',file);
+  fetch('/solicitud/upload',{method:'POST',body:fd}).then(r=>r.json()).then(data=>{
+    document.getElementById('sol-loader').style.display='none';
+    if(data.error){alert('Error: '+data.error);return;}
+    solData=data;showPreview('sol',data,SOL_LABELS);
+    document.getElementById('sol-alert').innerHTML=data.tiene_pe
+      ?`<div class="alert alert-success">✅ Ya tiene PE generado.</div>`
+      :`<div class="alert alert-warning">⏳ Sin PE generado todavía.</div>`;
+  }).catch(e=>{document.getElementById('sol-loader').style.display='none';alert('Error: '+e.message)});
+}
+function confirmSol(){
+  const btn=document.getElementById('sol-confirm-btn');
+  btn.disabled=true;document.getElementById('sol-status').textContent='Guardando...';
+  syncFields('sol',SOL_LABELS,solData);delete solData.tiene_pe;
+  fetch('/solicitud/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(solData)})
+    .then(r=>r.json()).then(res=>{
+      btn.disabled=false;
+      if(res.error){document.getElementById('sol-alert').innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`;document.getElementById('sol-status').textContent='';return;}
+      document.getElementById('sol-alert').innerHTML=`<div class="alert alert-success">✅ Solicitud guardada.</div>`;
+      document.getElementById('sol-status').textContent='';loadSolList();setTimeout(resetSol,3000);
+    }).catch(e=>{btn.disabled=false;document.getElementById('sol-status').textContent='Error: '+e.message});
+}
+function resetSol(){document.getElementById('sol-preview').style.display='none';document.getElementById('sol-file').value='';solData=null;}
+function loadSolList(){
+  fetch('/solicitud/list').then(r=>r.json()).then(list=>{
+    const el=document.getElementById('sol-list');
+    if(!list.length){el.innerHTML='<span class="empty-msg">No hay solicitudes registradas aún</span>';return;}
+    el.innerHTML=`<table class="dt"><thead><tr><th>Buque</th><th>Destino</th><th>Producto</th><th>Tn</th><th>DJVE</th><th>Fecha Sol.</th><th>Estado</th><th></th></tr></thead><tbody>
+      ${list.map(s=>`<tr><td>${s.buque||'-'}</td><td>${s.destino||'-'}</td><td>${s.producto||'-'}</td><td>${s.cantidad_tn||'-'}</td><td>${s.djve||'-'}</td><td>${s.fecha_solicitud||'-'}</td>
+      <td><span class="badge ${s.tiene_pe?'badge-ok':'badge-pending'}">${s.tiene_pe?'✅ PE Generado':'⏳ Pendiente'}</span></td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteSol(${s.id})">✕</button></td></tr>`).join('')}
+    </tbody></table>`;
+  });
+}
+function deleteSol(id){if(!confirm('¿Eliminar?'))return;fetch(`/solicitud/delete/${id}`,{method:'DELETE'}).then(()=>loadSolList());}
+
+// ---- Generic ----
+function showPreview(prefix,data,labels){
+  const grid=document.getElementById(prefix+'-grid');grid.innerHTML='';
+  Object.keys(labels).forEach(key=>{
+    const div=document.createElement('div');div.className='field-group';
+    const lbl=document.createElement('label');lbl.textContent=labels[key];
+    const inp=document.createElement('input');inp.type='text';inp.id=prefix+'_field_'+key;
+    inp.value=data[key]!==null&&data[key]!==undefined?data[key]:'';
+    inp.addEventListener('input',()=>inp.classList.add('changed'));
+    div.appendChild(lbl);div.appendChild(inp);grid.appendChild(div);
+  });
+  document.getElementById(prefix+'-preview').style.display='block';
+  document.getElementById(prefix+'-status').textContent='';
+  document.getElementById(prefix+'-preview').scrollIntoView({behavior:'smooth'});
+}
+function syncFields(prefix,labels,obj){Object.keys(labels).forEach(key=>{const el=document.getElementById(prefix+'_field_'+key);if(el)obj[key]=el.value;});}
+
+// ---- Init ----
+checkGmailStatus();
+loadPEList();
+
+// Handle OAuth redirect
+if(new URLSearchParams(window.location.search).get('gmail')==='ok'){
+  history.replaceState({},'','/');
+  checkGmailStatus();
+}
 </script>
 </body>
 </html>
