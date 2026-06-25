@@ -377,6 +377,71 @@ if(new URLSearchParams(window.location.search).get('gmail')==='ok'){
   history.replaceState({},'','/');
   checkGmailStatus();
 }
+loadPEList();
+
+// ==================== Plan de Cargas ====================
+let planData = null;
+
+document.getElementById('plan-drop').addEventListener('click', ()=>document.getElementById('plan-file').click());
+document.getElementById('plan-drop').addEventListener('dragover', e=>{e.preventDefault();document.getElementById('plan-drop').classList.add('drag-over')});
+document.getElementById('plan-drop').addEventListener('dragleave', ()=>document.getElementById('plan-drop').classList.remove('drag-over'));
+document.getElementById('plan-drop').addEventListener('drop', e=>{e.preventDefault();document.getElementById('plan-drop').classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)uploadPlan(f);});
+document.getElementById('plan-file').addEventListener('change', e=>{if(e.target.files[0])uploadPlan(e.target.files[0]);});
+
+function uploadPlan(file) {
+  document.getElementById('plan-preview').style.display='none';
+  document.getElementById('plan-loader').style.display='block';
+  document.getElementById('plan-result').innerHTML='';
+  const fd=new FormData(); fd.append('excel',file);
+  fetch('/plan/upload',{method:'POST',body:fd}).then(r=>r.json()).then(data=>{
+    document.getElementById('plan-loader').style.display='none';
+    if(data.error){alert('Error: '+data.error);return;}
+    planData=data;
+    const rows=data.rows.slice(0,5);
+    let html=`<table class="dt" style="margin-bottom:10px"><thead><tr><th>Semana</th><th>Buque</th><th>Booking</th><th>Producto</th><th>Cont.</th><th>POD</th><th>ETD</th></tr></thead><tbody>`;
+    html+=rows.map(r=>`<tr><td>${r.semana||'-'}</td><td>${r.buque||'-'}</td><td><strong>${r.booking||'-'}</strong></td><td>${r.producto||'-'}</td><td>${r.cantidad_contenedores||'-'}</td><td>${r.pod||'-'}</td><td>${r.etd||'-'}</td></tr>`).join('');
+    if(data.count>5) html+=`<tr><td colspan="7" style="text-align:center;color:#888;font-style:italic">... y ${data.count-5} filas más</td></tr>`;
+    html+='</tbody></table>';
+    document.getElementById('plan-summary').innerHTML=`Se encontraron <strong>${data.count}</strong> filas. Vista previa (primeras 5):<br><br>`+html;
+    document.getElementById('plan-preview').style.display='block';
+    document.getElementById('plan-status').textContent='';
+    document.getElementById('plan-preview').scrollIntoView({behavior:'smooth'});
+  }).catch(e=>{document.getElementById('plan-loader').style.display='none';alert('Error: '+e.message)});
+}
+
+function confirmPlan() {
+  const btn=document.getElementById('plan-confirm-btn');
+  btn.disabled=true; document.getElementById('plan-status').textContent='Guardando...';
+  fetch('/plan/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows:planData.rows})})
+    .then(r=>r.json()).then(res=>{
+      btn.disabled=false;
+      if(res.error){document.getElementById('plan-alert').innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`;document.getElementById('plan-status').textContent='';return;}
+      document.getElementById('plan-alert').innerHTML=`<div class="alert alert-success">✅ ${res.inserted} filas guardadas${res.skipped?`, ${res.skipped} ya existían`:''}.`;
+      document.getElementById('plan-status').textContent='';
+      loadPlanList(); setTimeout(resetPlan,4000);
+    }).catch(e=>{btn.disabled=false;document.getElementById('plan-status').textContent='Error: '+e.message});
+}
+
+function resetPlan(){document.getElementById('plan-preview').style.display='none';document.getElementById('plan-file').value='';planData=null;document.getElementById('plan-result').innerHTML='';}
+
+function loadPlanList() {
+  fetch('/plan/list').then(r=>r.json()).then(list=>{
+    const el=document.getElementById('plan-list');
+    if(!list.length){el.innerHTML='<span class="empty-msg">No hay bookings registrados aún</span>';return;}
+    el.innerHTML=`<table class="dt"><thead><tr><th>Semana</th><th>Buque</th><th>Booking</th><th>Producto</th><th>Cont.</th><th>POD</th><th>ETD</th><th>Solicitud</th><th>PE</th><th></th></tr></thead><tbody>
+      ${list.map(r=>`<tr>
+        <td>${r.semana||'-'}</td><td>${r.buque||'-'}</td><td><strong>${r.booking||'-'}</strong></td>
+        <td>${r.producto||'-'}</td><td>${r.cantidad_contenedores||'-'}</td><td>${r.pod||'-'}</td><td>${r.etd||'-'}</td>
+        <td style="text-align:center">${r.tiene_solicitud?'✅':'—'}</td>
+        <td style="text-align:center">${r.tiene_pe?'✅':'—'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deletePlan(${r.id})">✕</button></td>
+      </tr>`).join('')}
+    </tbody></table>`;
+  });
+}
+
+function deletePlan(id){if(!confirm('¿Eliminar?'))return;fetch(`/plan/delete/${id}`,{method:'DELETE'}).then(()=>loadPlanList());}
+
 </script>
 </body>
 </html>
