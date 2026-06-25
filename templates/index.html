@@ -307,8 +307,7 @@ function confirmPE(){
       btn.disabled=false;
       if(res.error){document.getElementById('pe-alert').innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`;document.getElementById('pe-status').textContent='';return;}
       document.getElementById('pe-alert').innerHTML=`<div class="alert alert-success">✅ PE <strong>${res.nro_pe}</strong> guardado.</div>`;
-      document.getElementById('pe-status').textContent='';loadPEList();
-loadDashboard();setTimeout(resetPE,3000);
+      document.getElementById('pe-status').textContent='';loadPEList();setTimeout(resetPE,3000);
     }).catch(e=>{btn.disabled=false;document.getElementById('pe-status').textContent='Error: '+e.message});
 }
 function resetPE(){document.getElementById('pe-preview').style.display='none';document.getElementById('pe-file').value='';peData=null;}
