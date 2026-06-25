@@ -268,8 +268,8 @@ function fetchFromGmail(tipo) {
         html += '</div>';
       }
       resultEl.innerHTML = html;
-      if(tipo==='pe') loadPEList();
-loadDashboard(); else loadSolList();
+      if(tipo==='pe') loadPEList(); else loadSolList();
+loadDashboard();
     }).catch(e => { loaderEl.style.display='none'; resultEl.innerHTML=`<div class="alert alert-danger">❌ ${e.message}</div>`; });
 }
 
