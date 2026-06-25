@@ -102,7 +102,8 @@ def build_excel(pe_rows, sol_rows):
     wb = Workbook()
     ws1 = wb.active
     ws1.title = "Permisos de Exportación"
-    for col, h in enumerate(HEADERS_PE, 1): _hcell(ws1.cell(row=1, column=col), h)
+    for col, h in enumerate(HEADERS_PE, 1):
+        _hcell(ws1.cell(row=1, column=col), h)
     ws1.row_dimensions[1].height = 35
     fills = [PatternFill("solid", start_color="DCE6F1"), PatternFill("solid", start_color="FFFFFF")]
     for r, row in enumerate(pe_rows, 2):
@@ -113,11 +114,13 @@ def build_excel(pe_rows, sol_rows):
             cell = ws1.cell(row=r, column=c, value=val)
             cell.font = Font(name="Arial", size=10)
             cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.border = _border(); cell.fill = fills[r % 2]
+            cell.border = _border()
+            cell.fill = fills[r % 2]
     tr = len(pe_rows)+2
     for col in range(1, len(HEADERS_PE)+1):
         cell = ws1.cell(row=tr, column=col)
-        cell.fill = PatternFill("solid", start_color="BDD7EE"); cell.border = _border()
+        cell.fill = PatternFill("solid", start_color="BDD7EE")
+        cell.border = _border()
         cell.font = Font(name="Arial", bold=True, size=10)
         cell.alignment = Alignment(horizontal="center", vertical="center")
     ws1.cell(row=tr, column=1).value = "TOTALES"
@@ -129,7 +132,8 @@ def build_excel(pe_rows, sol_rows):
     ws1.freeze_panes = "A2"
 
     ws2 = wb.create_sheet("Solicitudes Bunge")
-    for col, h in enumerate(HEADERS_SOL, 1): _hcell(ws2.cell(row=1, column=col), h)
+    for col, h in enumerate(HEADERS_SOL, 1):
+        _hcell(ws2.cell(row=1, column=col), h)
     ws2.row_dimensions[1].height = 35
     pe_djves = set(str(r["djve"] or "").strip() for r in pe_rows)
     pe_buques = set(str(r["buque"] or "").strip().upper() for r in pe_rows)
@@ -147,11 +151,13 @@ def build_excel(pe_rows, sol_rows):
             cell = ws2.cell(row=r, column=c, value=val)
             cell.font = Font(name="Arial", size=10)
             cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.border = _border(); cell.fill = rf
+            cell.border = _border()
+            cell.fill = rf
         ec = ws2.cell(row=r, column=len(FIELDS_SOL)+1, value="✅ PE Generado" if tiene_pe else "⏳ Pendiente")
         ec.font = Font(name="Arial", bold=True, size=10)
         ec.alignment = Alignment(horizontal="center", vertical="center")
-        ec.border = _border(); ec.fill = rf
+        ec.border = _border()
+        ec.fill = rf
     for i, w in enumerate([20,12,14,25,14,22,14,12,18,18,16,14,16,16],1):
         ws2.column_dimensions[get_column_letter(i)].width = w
     ws2.freeze_panes = "A2"
@@ -196,7 +202,7 @@ def gmail_auth():
     client_id = os.environ.get("GOOGLE_CLIENT_ID")
     client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
     if not client_id or not client_secret:
-        return jsonify({"error": "Faltan GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en las variables de Railway"}), 500
+        return jsonify({"error": "Faltan GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET"}), 500
     flow = get_flow(client_id, client_secret, get_redirect_uri())
     auth_url, state = flow.authorization_url(prompt="consent", access_type="offline")
     session["oauth_state"] = state
@@ -227,33 +233,25 @@ def gmail_disconnect():
 
 @app.route("/gmail/fetch/<tipo>", methods=["POST"])
 def gmail_fetch(tipo):
-    """tipo = 'pe' o 'solicitud'"""
     service = get_gmail_service()
     if not service:
         return jsonify({"error": "Gmail no conectado"}), 401
-
     if tipo == "pe":
-        senders = [f"@{PE_SENDER_DOMAIN}"]
         query_senders = [f"@{PE_SENDER_DOMAIN}"]
     else:
         query_senders = BUNGE_SENDERS
-
     query = f"from:({'  OR '.join(query_senders)}) has:attachment filename:pdf is:unread"
     results = service.users().messages().list(userId="me", q=query, maxResults=20).execute()
     messages = results.get("messages", [])
-
     if not messages:
         return jsonify({"found": 0, "processed": [], "skipped": []})
-
     db = get_db()
     processed = []
     skipped = []
-
     for msg in messages:
         msg_id = msg["id"]
         sender, subject, date = get_message_sender(service, msg_id)
         attachments = get_pdf_attachments_from_message(service, msg_id)
-
         for filename, pdf_bytes in attachments:
             try:
                 if tipo == "pe":
@@ -270,7 +268,6 @@ def gmail_fetch(tipo):
                     processed.append({"filename": filename, "id": nro, "sender": sender, "subject": subject})
                 else:
                     data = _call_claude(pdf_bytes, SOL_PROMPT)
-                    # Check if already processed (same gmail_msg_id)
                     exists = db.execute("SELECT 1 FROM solicitudes WHERE gmail_msg_id=?", (msg_id,)).fetchone()
                     if exists:
                         skipped.append({"filename": filename, "reason": "Ya procesado"})
@@ -281,12 +278,9 @@ def gmail_fetch(tipo):
                     db.execute(f"INSERT INTO solicitudes ({','.join(FIELDS_SOL)}, gmail_msg_id) VALUES ({ph})", vals)
                     db.commit()
                     processed.append({"filename": filename, "id": data.get("buque",""), "sender": sender, "subject": subject})
-
                 mark_as_read(service, msg_id)
-
             except Exception as e:
                 skipped.append({"filename": filename, "reason": str(e)})
-
     return jsonify({"found": len(messages), "processed": processed, "skipped": skipped})
 
 # ---------- Routes PEs ----------
@@ -304,7 +298,7 @@ def upload():
         data = _call_claude(pdf_bytes, PE_PROMPT)
     except Exception as e:
         return jsonify({"error": f"Error extrayendo datos: {str(e)}"}), 500
-db = get_db()
+    db = get_db()
     exists = db.execute("SELECT 1 FROM permisos WHERE nro_pe=?", (data.get("nro_pe",""),)).fetchone()
     data["already_exists"] = exists is not None
     djve = str(data.get("djve") or "").strip()
@@ -325,6 +319,7 @@ def confirm():
     if db.execute("SELECT 1 FROM permisos WHERE nro_pe=?", (nro,)).fetchone():
         return jsonify({"error": f"El PE {nro} ya existe"}), 409
     pe.pop("already_exists", None)
+    pe.pop("solicitud_match", None)
     ph = ','.join(['?']*len(FIELDS_PE))
     vals = [str(pe.get(f,'')) if pe.get(f) is not None else None for f in FIELDS_PE]
     db.execute(f"INSERT INTO permisos ({','.join(FIELDS_PE)}) VALUES ({ph})", vals)
@@ -348,6 +343,13 @@ def list_pes():
         d["booking"] = sol["booking"] if sol and sol["booking"] else None
         result.append(d)
     return jsonify(result)
+
+@app.route("/pe/delete/<nro>", methods=["DELETE"])
+def pe_delete(nro):
+    db = get_db()
+    db.execute("DELETE FROM permisos WHERE nro_pe=?", (nro,))
+    db.commit()
+    return jsonify({"ok": True})
 
 # ---------- Routes Solicitudes ----------
 
@@ -400,13 +402,6 @@ def solicitud_delete(sol_id):
     db.commit()
     return jsonify({"ok": True})
 
-@app.route("/pe/delete/<nro>", methods=["DELETE"])
-def pe_delete(nro):
-    db = get_db()
-    db.execute("DELETE FROM permisos WHERE nro_pe=?", (nro,))
-    db.commit()
-    return jsonify({"ok": True})
-
 @app.route("/download")
 def download():
     db = get_db()
@@ -421,10 +416,3 @@ with app.app_context():
 if __name__ == "__main__":
     print("✅ App corriendo en http://localhost:5000")
     app.run(debug=False, port=5000)
-
-@app.route("/pe/delete/<nro>", methods=["DELETE"])
-def pe_delete(nro):
-    db = get_db()
-    db.execute("DELETE FROM permisos WHERE nro_pe=?", (nro,))
-    db.commit()
-    return jsonify({"ok": True})
