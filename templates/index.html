@@ -81,6 +81,7 @@
     <button class="tab-btn" onclick="switchTab('pes',this)">📋 Permisos de Exportación</button>
     <button class="tab-btn" onclick="switchTab('sol',this)">📥 Solicitudes Bunge</button>
     <button class="tab-btn" onclick="switchTab('plan',this)">📦 Plan de Cargas</button>
+    <button class="tab-btn" onclick="switchTab('buscar',this)">🔍 Buscador</button>
   </div>
 
   <!-- TAB Dashboard -->
@@ -205,6 +206,22 @@
       <div id="plan-list"><span class="empty-msg">Cargando...</span></div>
     </div>
   </div>
+
+  <!-- TAB Buscador -->
+  <div id="tab-buscar" class="tab-content">
+    <div class="card">
+      <h2>🔍 Buscador global</h2>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px">
+        <input type="text" id="search-input" placeholder="Ingresá buque, booking, Nº PE, DJVE, destino..."
+          style="flex:1;border:2px solid #BDD7EE;border-radius:6px;padding:10px 14px;font-size:0.95rem;outline:none"
+          oninput="searchDebounce()"
+          onfocus="this.style.borderColor='#1F4E79'"
+          onblur="this.style.borderColor='#BDD7EE'">
+        <button class="btn btn-primary" onclick="doSearch()">Buscar</button>
+      </div>
+      <div id="search-results"></div>
+    </div>
+  </div>
 </div>
 
 <footer>Trimar S.A. · Gestor de PEs · procesamiento vía Claude AI</footer>
@@ -219,6 +236,7 @@ function switchTab(name, btn) {
   if(name==='sol') loadSolList();
   if(name==='plan') loadPlanList();
   if(name==='dash') loadDashboard();
+  if(name==='buscar') { document.getElementById('search-input').focus(); }
 }
 
 // ---- Gmail status ----
@@ -390,6 +408,66 @@ if(new URLSearchParams(window.location.search).get('gmail')==='ok'){
 }
 
 // ==================== Dashboard ====================
+
+// ==================== Buscador ====================
+let searchTimeout = null;
+
+function searchDebounce() {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(doSearch, 400);
+}
+
+function doSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  const el = document.getElementById('search-results');
+  if(!q || q.length < 2) { el.innerHTML = ''; return; }
+  el.innerHTML = '<span class="empty-msg">Buscando...</span>';
+  fetch(`/search?q=${encodeURIComponent(q)}`).then(r=>r.json()).then(data=>{
+    const total = data.pes.length + data.solicitudes.length + data.plan.length;
+    if(total === 0) { el.innerHTML = '<span class="empty-msg">No se encontraron resultados para "'+q+'"</span>'; return; }
+    let html = '';
+
+    if(data.pes.length) {
+      html += `<div style="margin-bottom:18px">
+        <h3 style="font-size:0.9rem;color:#1F4E79;margin-bottom:8px">📋 Permisos de Exportación (${data.pes.length})</h3>
+        <table class="dt"><thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th><th>Toneladas</th><th>FOB (USD)</th><th>DJVE</th><th>Vto. Embarque</th></tr></thead><tbody>
+        ${data.pes.map(p=>`<tr>
+          <td><strong>${p.nro_pe||'-'}</strong></td><td>${p.fecha_oficializacion||'-'}</td>
+          <td>${p.buque||'-'}</td><td>${p.pais_destino||'-'}</td>
+          <td>${p.toneladas||'-'}</td><td>${p.fob_total_usd||'-'}</td>
+          <td>${p.djve||'-'}</td><td>${p.vto_embarque||'-'}</td>
+        </tr>`).join('')}
+        </tbody></table></div>`;
+    }
+
+    if(data.solicitudes.length) {
+      html += `<div style="margin-bottom:18px">
+        <h3 style="font-size:0.9rem;color:#217346;margin-bottom:8px">📥 Solicitudes Bunge (${data.solicitudes.length})</h3>
+        <table class="dt"><thead><tr><th>Buque</th><th>Producto</th><th>Cantidad (Tn)</th><th>DJVE</th><th>Booking</th><th>Fecha Sol.</th><th>Importe (USD)</th></tr></thead><tbody>
+        ${data.solicitudes.map(s=>`<tr>
+          <td>${s.buque||'-'}</td><td>${s.producto||'-'}</td><td>${s.cantidad_tn||'-'}</td>
+          <td>${s.djve||'-'}</td><td>${s.booking||'-'}</td>
+          <td>${s.fecha_solicitud||'-'}</td><td>${s.importe_total_usd||'-'}</td>
+        </tr>`).join('')}
+        </tbody></table></div>`;
+    }
+
+    if(data.plan.length) {
+      html += `<div style="margin-bottom:18px">
+        <h3 style="font-size:0.9rem;color:#7B3F00;margin-bottom:8px">📦 Plan de Cargas (${data.plan.length})</h3>
+        <table class="dt"><thead><tr><th>Semana</th><th>Buque</th><th>Booking</th><th>Producto</th><th>Cont.</th><th>POD</th><th>ETD</th></tr></thead><tbody>
+        ${data.plan.map(r=>`<tr>
+          <td>${r.semana||'-'}</td><td>${r.buque||'-'}</td><td><strong>${r.booking||'-'}</strong></td>
+          <td>${r.producto||'-'}</td><td>${r.cantidad_contenedores||'-'}</td>
+          <td>${r.pod||'-'}</td><td>${r.etd||'-'}</td>
+        </tr>`).join('')}
+        </tbody></table></div>`;
+    }
+
+    el.innerHTML = html;
+  }).catch(e => { el.innerHTML = `<span class="empty-msg">Error: ${e.message}</span>`; });
+}
+
 function loadDashboard() {
   fetch('/dashboard').then(r=>r.json()).then(d=>{
     const el = document.getElementById('dash-content');
