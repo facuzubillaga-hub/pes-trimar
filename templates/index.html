@@ -79,6 +79,7 @@
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('pes',this)">📋 Permisos de Exportación</button>
     <button class="tab-btn" onclick="switchTab('sol',this)">📥 Solicitudes Bunge</button>
+    <button class="tab-btn" onclick="switchTab('plan',this)">📦 Plan de Cargas</button>
   </div>
 
   <!-- TAB PEs -->
@@ -160,6 +161,39 @@
         <button class="btn btn-outline" onclick="loadSolList()">↻ Actualizar</button>
       </div>
       <div id="sol-list"><span class="empty-msg">Cargando...</span></div>
+    </div>
+  </div>
+
+  <!-- TAB Plan de Cargas -->
+  <div id="tab-plan" class="tab-content">
+    <div class="card">
+      <h2>📦 Cargar Plan de Cargas de Bunge</h2>
+      <div class="drop-zone" id="plan-drop" onclick="document.getElementById('plan-file').click()">
+        <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#1F4E79" stroke-width="1.5" style="margin-bottom:8px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        <p><strong>Hacé click o arrastrá el Excel</strong> del Plan de Cargas</p>
+        <p style="margin-top:4px;font-size:0.76rem;color:#999">Archivos .xlsx — todas las hojas se procesan automáticamente</p>
+      </div>
+      <input type="file" id="plan-file" accept=".xlsx,.xls" style="display:none">
+      <div id="plan-result"></div>
+    </div>
+    <div class="loader" id="plan-loader"><div class="spinner"></div><p style="color:#555">Procesando Excel...</p></div>
+    <div class="card-inner" id="plan-preview" style="display:none">
+      <h2>✏️ Confirmar carga</h2>
+      <div id="plan-alert"></div>
+      <div id="plan-summary" style="margin-bottom:14px;font-size:0.88rem;color:#444"></div>
+      <div class="actions">
+        <button class="btn btn-success" id="plan-confirm-btn" onclick="confirmPlan()">✔ Confirmar y guardar todo</button>
+        <button class="btn btn-outline" onclick="resetPlan()">Cancelar</button>
+        <span id="plan-status" style="font-size:0.83rem;color:#555"></span>
+      </div>
+    </div>
+    <div class="card-inner">
+      <h2>📋 Bookings registrados</h2>
+      <div class="toolbar">
+        <a href="/download" class="btn btn-success" download>⬇ Descargar Excel</a>
+        <button class="btn btn-outline" onclick="loadPlanList()">↻ Actualizar</button>
+      </div>
+      <div id="plan-list"><span class="empty-msg">Cargando...</span></div>
     </div>
   </div>
 </div>
@@ -249,11 +283,7 @@ function uploadPE(file){
     document.getElementById('pe-loader').style.display='none';
     if(data.error){alert('Error: '+data.error);return;}
     peData=data;showPreview('pe',data,PE_LABELS);
-    let alertHtml='';
-    if(data.already_exists) alertHtml+=`<div class="alert alert-warning">⚠️ El PE <strong>${data.nro_pe}</strong> ya existe.</div>`;
-    if(data.solicitud_match) alertHtml+=`<div class="alert alert-success">🔗 Solicitud Bunge encontrada — Buque: <strong>${data.solicitud_match.buque}</strong> · Booking: <strong>${data.solicitud_match.booking||'sin booking'}</strong> · Fecha: ${data.solicitud_match.fecha_solicitud}</div>`;
-    else alertHtml+=`<div class="alert alert-info">ℹ️ No se encontró solicitud Bunge asociada.</div>`;
-    document.getElementById('pe-alert').innerHTML=alertHtml;
+    if(data.already_exists) document.getElementById('pe-alert').innerHTML=`<div class="alert alert-warning">⚠️ El PE <strong>${data.nro_pe}</strong> ya existe.</div>`;
   }).catch(e=>{document.getElementById('pe-loader').style.display='none';alert('Error: '+e.message)});
 }
 function confirmPE(){
@@ -269,12 +299,11 @@ function confirmPE(){
     }).catch(e=>{btn.disabled=false;document.getElementById('pe-status').textContent='Error: '+e.message});
 }
 function resetPE(){document.getElementById('pe-preview').style.display='none';document.getElementById('pe-file').value='';peData=null;}
-function deletePE(nro){if(!confirm('¿Eliminar PE '+nro+'?'))return;fetch(`/pe/delete/${encodeURIComponent(nro)}`,{method:'DELETE'}).then(()=>loadPEList());}
 function loadPEList(){
   fetch('/list').then(r=>r.json()).then(list=>{
     const el=document.getElementById('pe-list');
     if(!list.length){el.innerHTML='<span class="empty-msg">No hay PEs registrados aún</span>';return;}
-    el.innerHTML=`<table class="dt"><thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th><th>Booking</th><th></th></tr></thead><tbody>${list.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.fecha_oficializacion}</td><td>${p.buque}</td><td>${p.pais_destino}</td><td>${p.booking?`<strong style="color:#217346">${p.booking}</strong>`:'<span style="color:#aaa">—</span>'}</td><td><button class="btn btn-danger btn-sm" onclick="deletePE('${p.nro_pe}')">✕</button></td></tr>`).join('')}</tbody></table>`;
+    el.innerHTML=`<table class="dt"><thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th></tr></thead><tbody>${list.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.fecha_oficializacion}</td><td>${p.buque}</td><td>${p.pais_destino}</td></tr>`).join('')}</tbody></table>`;
   });
 }
 
