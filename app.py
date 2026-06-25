@@ -304,9 +304,17 @@ def upload():
         data = _call_claude(pdf_bytes, PE_PROMPT)
     except Exception as e:
         return jsonify({"error": f"Error extrayendo datos: {str(e)}"}), 500
-    db = get_db()
+db = get_db()
     exists = db.execute("SELECT 1 FROM permisos WHERE nro_pe=?", (data.get("nro_pe",""),)).fetchone()
     data["already_exists"] = exists is not None
+    djve = str(data.get("djve") or "").strip()
+    buque = str(data.get("buque") or "").strip().upper()
+    sol = None
+    if djve:
+        sol = db.execute("SELECT booking, buque, fecha_solicitud FROM solicitudes WHERE djve=?", (djve,)).fetchone()
+    if not sol and buque:
+        sol = db.execute("SELECT booking, buque, fecha_solicitud FROM solicitudes WHERE UPPER(buque)=?", (buque,)).fetchone()
+    data["solicitud_match"] = dict(sol) if sol else None
     return jsonify(data)
 
 @app.route("/confirm", methods=["POST"])
@@ -326,8 +334,20 @@ def confirm():
 @app.route("/list")
 def list_pes():
     db = get_db()
-    rows = db.execute("SELECT nro_pe, buque, pais_destino, fecha_oficializacion FROM permisos ORDER BY fecha_oficializacion DESC, nro_pe DESC").fetchall()
-    return jsonify([dict(r) for r in rows])
+    rows = db.execute("SELECT nro_pe, buque, pais_destino, fecha_oficializacion, djve FROM permisos ORDER BY fecha_oficializacion DESC, nro_pe DESC").fetchall()
+    result = []
+    for row in rows:
+        d = dict(row)
+        djve = str(d.get("djve") or "").strip()
+        buque = str(d.get("buque") or "").strip().upper()
+        sol = None
+        if djve:
+            sol = db.execute("SELECT booking FROM solicitudes WHERE djve=?", (djve,)).fetchone()
+        if not sol and buque:
+            sol = db.execute("SELECT booking FROM solicitudes WHERE UPPER(buque)=?", (buque,)).fetchone()
+        d["booking"] = sol["booking"] if sol and sol["booking"] else None
+        result.append(d)
+    return jsonify(result)
 
 # ---------- Routes Solicitudes ----------
 
