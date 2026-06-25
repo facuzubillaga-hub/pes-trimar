@@ -274,7 +274,7 @@ function loadPEList(){
   fetch('/list').then(r=>r.json()).then(list=>{
     const el=document.getElementById('pe-list');
     if(!list.length){el.innerHTML='<span class="empty-msg">No hay PEs registrados aún</span>';return;}
-    el.innerHTML=`<table class="dt"><thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th></tr></thead><tbody>${list.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.fecha_oficializacion}</td><td>${p.buque}</td><td>${p.pais_destino}</td></tr>`).join('')}</tbody></table>`;
+    el.innerHTML=`<table class="dt"><thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th><th>Booking</th><th></th></tr></thead><tbody>${list.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.fecha_oficializacion}</td><td>${p.buque}</td><td>${p.pais_destino}</td><td>${p.booking?`<strong style="color:#217346">${p.booking}</strong>`:'<span style="color:#aaa">—</span>'}</td><td><button class="btn btn-danger btn-sm" onclick="deletePE('${p.nro_pe}')">✕</button></td></tr>`).join('')}</tbody></table>`;
   });
 }
 
