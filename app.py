@@ -227,6 +227,7 @@ Solo el JSON, nada más."""
 
 SOL_PROMPT = """Extraé los siguientes campos de esta Solicitud de Permiso de Embarque de Bunge y devolvé SOLO un JSON válido:
 {"buque":"","bandera":"","destino":"","producto":"","cantidad_tn":0.0,"djve":"","contrato":"","cond_venta":"","precio_fob_usd_tn":0.0,"importe_total_usd":0.0,"fecha_solicitud":"DD/MM/AAAA","fecha_vta":"DD/MM/AAAA","booking":null}
+IMPORTANTE: cantidad_tn debe ser en TONELADAS (no kilogramos). Si ves un valor en kg como 198000, convertilo a toneladas: 198.
 Solo el JSON, nada más."""
 
 # ---------- Gmail OAuth ----------
@@ -515,6 +516,27 @@ def plan_delete(row_id):
     db.execute("DELETE FROM plan_cargas WHERE id=?", (row_id,))
     db.commit()
     return jsonify({"ok": True})
+
+
+@app.route("/admin/fix_cantidades")
+def fix_cantidades():
+    """Fix cantidad_tn values that were stored in kg instead of tonnes."""
+    db = get_db()
+    rows = db.execute("SELECT id, cantidad_tn FROM solicitudes").fetchall()
+    fixed = 0
+    for row in rows:
+        val = row["cantidad_tn"]
+        if val:
+            try:
+                f = float(val)
+                if f > 1000:  # Likely in kg
+                    new_val = round(f / 1000, 3)
+                    db.execute("UPDATE solicitudes SET cantidad_tn=? WHERE id=?", (str(new_val), row["id"]))
+                    fixed += 1
+            except:
+                pass
+    db.commit()
+    return jsonify({"ok": True, "fixed": fixed})
 
 # ---------- Download ----------
 
