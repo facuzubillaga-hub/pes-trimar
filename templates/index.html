@@ -12,9 +12,9 @@
   header span{font-size:0.82rem;opacity:0.75}
   .gmail-bar{background:#e8f0fb;border-bottom:2px solid #BDD7EE;padding:10px 30px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:0.85rem}
   .gmail-bar strong{color:#1F4E79}
-  .container{max-width:980px;margin:24px auto;padding:0 18px}
-  .tabs{display:flex;gap:4px}
-  .tab-btn{padding:10px 26px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:0.9rem;font-weight:600;background:#d0dce8;color:#3a5068;transition:all 0.15s}
+  .container{max-width:1100px;margin:24px auto;padding:0 18px}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap}
+  .tab-btn{padding:10px 22px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:0.88rem;font-weight:600;background:#d0dce8;color:#3a5068;transition:all 0.15s}
   .tab-btn.active{background:white;color:#1F4E79;border-bottom:3px solid #1F4E79}
   .tab-content{display:none}.tab-content.active{display:block}
   .card{background:white;border-radius:0 8px 8px 8px;box-shadow:0 2px 10px rgba(0,0,0,0.08);padding:24px 28px;margin-bottom:18px}
@@ -59,17 +59,16 @@
   .divider{width:1px;height:24px;background:#d0d9e3;margin:0 4px}
   .empty-msg{color:#999;font-style:italic;font-size:0.86rem;padding:10px 0}
   .gmail-result{margin-top:10px;font-size:0.84rem}
+  .stat-card{background:white;border-radius:8px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
   footer{text-align:center;color:#aaa;font-size:0.74rem;padding:18px 0 32px}
 </style>
 </head>
 <body>
-
 <header>
   <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
   <div><h1>Gestor de Permisos de Exportación</h1><span>Agencia Trimar S.A. — Puerto Quequén</span></div>
 </header>
 
-<!-- Gmail status bar -->
 <div class="gmail-bar" id="gmail-bar">
   <span id="gmail-status-text">⏳ Verificando conexión Gmail...</span>
   <div id="gmail-actions"></div>
@@ -104,7 +103,7 @@
         <div class="divider"></div>
         <span style="font-size:0.82rem;color:#666">o subí el PDF manualmente:</span>
       </div>
-      <div class="drop-zone" id="pe-drop" onclick="document.getElementById('pe-file').click()">
+      <div class="drop-zone" id="pe-drop">
         <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#1F4E79" stroke-width="1.5" style="margin-bottom:8px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
         <p><strong>Hacé click o arrastrá el PDF</strong> del PE oficializado</p>
         <p style="margin-top:4px;font-size:0.76rem;color:#999">Solo archivos .pdf</p>
@@ -145,7 +144,7 @@
         <div class="divider"></div>
         <span style="font-size:0.82rem;color:#666">o subí el PDF manualmente:</span>
       </div>
-      <div class="drop-zone" id="sol-drop" onclick="document.getElementById('sol-file').click()">
+      <div class="drop-zone" id="sol-drop">
         <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#1F4E79" stroke-width="1.5" style="margin-bottom:8px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
         <p><strong>Hacé click o arrastrá el PDF</strong> de la solicitud de Bunge</p>
         <p style="margin-top:4px;font-size:0.76rem;color:#999">Solo archivos .pdf</p>
@@ -178,7 +177,7 @@
   <div id="tab-plan" class="tab-content">
     <div class="card">
       <h2>📦 Cargar Plan de Cargas de Bunge</h2>
-      <div class="drop-zone" id="plan-drop" onclick="document.getElementById('plan-file').click()">
+      <div class="drop-zone" id="plan-drop">
         <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#1F4E79" stroke-width="1.5" style="margin-bottom:8px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
         <p><strong>Hacé click o arrastrá el Excel</strong> del Plan de Cargas</p>
         <p style="margin-top:4px;font-size:0.76rem;color:#999">Archivos .xlsx — todas las hojas se procesan automáticamente</p>
@@ -222,6 +221,7 @@
       <div id="search-results"></div>
     </div>
   </div>
+
 </div>
 
 <footer>Trimar S.A. · Gestor de PEs · procesamiento vía Claude AI</footer>
@@ -236,72 +236,58 @@ function switchTab(name, btn) {
   if(name==='sol') loadSolList();
   if(name==='plan') loadPlanList();
   if(name==='dash') loadDashboard();
-  if(name==='buscar') { document.getElementById('search-input').focus(); }
+  if(name==='buscar') document.getElementById('search-input').focus();
 }
 
-// ---- Gmail status ----
+// ---- Gmail ----
 function checkGmailStatus() {
-  fetch('/gmail/status').then(r=>r.json()).then(s => {
-    const bar = document.getElementById('gmail-status-text');
-    const actions = document.getElementById('gmail-actions');
-    if(s.connected) {
-      bar.innerHTML = '✅ <strong>Gmail conectado</strong> — trimar@trimar.com.ar';
-      actions.innerHTML = `<button class="btn btn-outline btn-sm" onclick="disconnectGmail()">Desconectar</button>`;
-      document.getElementById('btn-gmail-pe').disabled = false;
-      document.getElementById('btn-gmail-sol').disabled = false;
+  fetch('/gmail/status').then(r=>r.json()).then(s=>{
+    const bar=document.getElementById('gmail-status-text');
+    const actions=document.getElementById('gmail-actions');
+    if(s.connected){
+      bar.innerHTML='✅ <strong>Gmail conectado</strong> — trimar@trimar.com.ar';
+      actions.innerHTML=`<button class="btn btn-outline btn-sm" onclick="disconnectGmail()">Desconectar</button>`;
+      document.getElementById('btn-gmail-pe').disabled=false;
+      document.getElementById('btn-gmail-sol').disabled=false;
     } else {
-      bar.innerHTML = '⚠️ Gmail no conectado';
-      actions.innerHTML = `<a href="/gmail/auth" class="btn btn-gmail btn-sm">Conectar Gmail</a>`;
+      bar.innerHTML='⚠️ Gmail no conectado';
+      actions.innerHTML=`<a href="/gmail/auth" class="btn btn-gmail btn-sm">Conectar Gmail</a>`;
     }
   });
 }
+function disconnectGmail(){if(!confirm('¿Desconectar Gmail?'))return;fetch('/gmail/disconnect').then(()=>checkGmailStatus());}
 
-function disconnectGmail() {
-  if(!confirm('¿Desconectar Gmail?')) return;
-  fetch('/gmail/disconnect').then(()=>checkGmailStatus());
-}
-
-// ---- Gmail fetch ----
 function fetchFromGmail(tipo) {
-  const resultEl = document.getElementById(`gmail-result-${tipo==='pe'?'pe':'sol'}`);
-  const loaderEl = document.getElementById(`${tipo==='pe'?'pe':'sol'}-loader`);
-  resultEl.innerHTML = '<span style="color:#555">🔍 Buscando mails nuevos...</span>';
-  loaderEl.style.display = 'block';
-  fetch(`/gmail/fetch/${tipo}`, {method:'POST'})
-    .then(r=>r.json()).then(res => {
-      loaderEl.style.display = 'none';
-      if(res.error) { resultEl.innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`; return; }
-      if(res.found === 0) {
-        resultEl.innerHTML = `<div class="alert alert-info">📭 No hay mails nuevos con PDF adjunto.</div>`; return;
-      }
-      let html = '';
-      if(res.processed.length) {
-        html += `<div class="alert alert-success">✅ <strong>${res.processed.length}</strong> PDF${res.processed.length>1?'s':''} procesado${res.processed.length>1?'s':''} y guardado${res.processed.length>1?'s':''}:<br>`;
-        html += res.processed.map(p=>`&nbsp;• ${p.filename} — <em>${p.subject}</em>`).join('<br>');
-        html += '</div>';
-      }
-      if(res.skipped.length) {
-        html += `<div class="alert alert-warning">⚠️ <strong>${res.skipped.length}</strong> omitido${res.skipped.length>1?'s':''}:<br>`;
-        html += res.skipped.map(p=>`&nbsp;• ${p.filename}: ${p.reason}`).join('<br>');
-        html += '</div>';
-      }
-      resultEl.innerHTML = html;
-      if(tipo==='pe') loadPEList(); else loadSolList();
-    }).catch(e => { loaderEl.style.display='none'; resultEl.innerHTML=`<div class="alert alert-danger">❌ ${e.message}</div>`; });
+  const resultEl=document.getElementById(`gmail-result-${tipo==='pe'?'pe':'sol'}`);
+  const loaderEl=document.getElementById(`${tipo==='pe'?'pe':'sol'}-loader`);
+  resultEl.innerHTML='<span style="color:#555">🔍 Buscando mails nuevos...</span>';
+  loaderEl.style.display='block';
+  fetch(`/gmail/fetch/${tipo}`,{method:'POST'}).then(r=>r.json()).then(res=>{
+    loaderEl.style.display='none';
+    if(res.error){resultEl.innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`;return;}
+    if(res.found===0){resultEl.innerHTML=`<div class="alert alert-info">📭 No hay mails nuevos con PDF adjunto.</div>`;return;}
+    let html='';
+    if(res.processed.length) html+=`<div class="alert alert-success">✅ <strong>${res.processed.length}</strong> PDF${res.processed.length>1?'s':''} procesado${res.processed.length>1?'s':''}:<br>${res.processed.map(p=>`&nbsp;• ${p.filename} — <em>${p.subject}</em>`).join('<br>')}</div>`;
+    if(res.skipped.length) html+=`<div class="alert alert-warning">⚠️ <strong>${res.skipped.length}</strong> omitido${res.skipped.length>1?'s':''}:<br>${res.skipped.map(p=>`&nbsp;• ${p.filename}: ${p.reason}`).join('<br>')}</div>`;
+    resultEl.innerHTML=html;
+    if(tipo==='pe') loadPEList(); else loadSolList();
+    loadDashboard();
+  }).catch(e=>{loaderEl.style.display='none';resultEl.innerHTML=`<div class="alert alert-danger">❌ ${e.message}</div>`;});
 }
 
 // ---- Drop & file ----
 function setupDrop(zoneId, fileId, handler) {
-  const zone = document.getElementById(zoneId);
-  zone.addEventListener('dragover', e=>{e.preventDefault();zone.classList.add('drag-over')});
-  zone.addEventListener('dragleave', ()=>zone.classList.remove('drag-over'));
-  zone.addEventListener('drop', e=>{e.preventDefault();zone.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f&&f.type==='application/pdf')handler(f)});
-  document.getElementById(fileId).addEventListener('change', e=>{if(e.target.files[0])handler(e.target.files[0])});
+  const zone=document.getElementById(zoneId);
+  zone.addEventListener('click',()=>document.getElementById(fileId).click());
+  zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over')});
+  zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));
+  zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)handler(f)});
+  document.getElementById(fileId).addEventListener('change',e=>{if(e.target.files[0])handler(e.target.files[0])});
 }
 
 // ==================== PEs ====================
-let peData = null;
-const PE_LABELS = {nro_pe:"Nº PE",fecha_oficializacion:"Fecha Oficialización",buque:"Buque",bandera:"Bandera",pais_destino:"País Destino",mercaderia:"Mercadería",posicion_arancelaria:"Posición Arancelaria",cond_venta:"Cond. Venta",peso_bruto_kg:"Peso Bruto (kg)",toneladas:"Toneladas",fob_total_usd:"FOB Total (USD)",flete_usd:"Flete (USD)",precio_unit_usd_tn:"Precio Unit. (USD/Tn)",precio_oficial_usd_tn:"Precio Oficial (USD/Tn)",djve:"DJVE",fecha_cierre_vta:"Fecha Cierre Vta.",vto_embarque:"Vto. Embarque",ant_gan_usd:"Ant. Gan. (USD)",cotizacion:"Cotización"};
+let peData=null;
+const PE_LABELS={nro_pe:"Nº PE",fecha_oficializacion:"Fecha Oficialización",buque:"Buque",bandera:"Bandera",pais_destino:"País Destino",mercaderia:"Mercadería",posicion_arancelaria:"Posición Arancelaria",cond_venta:"Cond. Venta",peso_bruto_kg:"Peso Bruto (kg)",toneladas:"Toneladas",fob_total_usd:"FOB Total (USD)",flete_usd:"Flete (USD)",precio_unit_usd_tn:"Precio Unit. (USD/Tn)",precio_oficial_usd_tn:"Precio Oficial (USD/Tn)",djve:"DJVE",fecha_cierre_vta:"Fecha Cierre Vta.",vto_embarque:"Vto. Embarque",ant_gan_usd:"Ant. Gan. (USD)",cotizacion:"Cotización"};
 
 setupDrop('pe-drop','pe-file',uploadPE);
 function uploadPE(file){
@@ -312,27 +298,36 @@ function uploadPE(file){
     document.getElementById('pe-loader').style.display='none';
     if(data.error){alert('Error: '+data.error);return;}
     peData=data;showPreview('pe',data,PE_LABELS);
-    if(data.already_exists) document.getElementById('pe-alert').innerHTML=`<div class="alert alert-warning">⚠️ El PE <strong>${data.nro_pe}</strong> ya existe.</div>`;
+    let alertHtml='';
+    if(data.already_exists) alertHtml+=`<div class="alert alert-warning">⚠️ El PE <strong>${data.nro_pe}</strong> ya existe.</div>`;
+    if(data.solicitud_match) alertHtml+=`<div class="alert alert-success">🔗 Solicitud Bunge encontrada — Buque: <strong>${data.solicitud_match.buque}</strong> · Booking: <strong>${data.solicitud_match.booking||'sin booking'}</strong> · Fecha: ${data.solicitud_match.fecha_solicitud}</div>`;
+    else alertHtml+=`<div class="alert alert-info">ℹ️ No se encontró solicitud Bunge asociada.</div>`;
+    document.getElementById('pe-alert').innerHTML=alertHtml;
   }).catch(e=>{document.getElementById('pe-loader').style.display='none';alert('Error: '+e.message)});
 }
 function confirmPE(){
   const btn=document.getElementById('pe-confirm-btn');
   btn.disabled=true;document.getElementById('pe-status').textContent='Guardando...';
-  syncFields('pe',PE_LABELS,peData);delete peData.already_exists;
+  syncFields('pe',PE_LABELS,peData);delete peData.already_exists;delete peData.solicitud_match;
   fetch('/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(peData)})
     .then(r=>r.json()).then(res=>{
       btn.disabled=false;
       if(res.error){document.getElementById('pe-alert').innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`;document.getElementById('pe-status').textContent='';return;}
       document.getElementById('pe-alert').innerHTML=`<div class="alert alert-success">✅ PE <strong>${res.nro_pe}</strong> guardado.</div>`;
-      document.getElementById('pe-status').textContent='';loadPEList();setTimeout(resetPE,3000);
+      document.getElementById('pe-status').textContent='';loadPEList();loadDashboard();setTimeout(resetPE,3000);
     }).catch(e=>{btn.disabled=false;document.getElementById('pe-status').textContent='Error: '+e.message});
 }
 function resetPE(){document.getElementById('pe-preview').style.display='none';document.getElementById('pe-file').value='';peData=null;}
+function deletePE(nro){if(!confirm('¿Eliminar PE '+nro+'?'))return;fetch(`/pe/delete/${encodeURIComponent(nro)}`,{method:'DELETE'}).then(()=>{loadPEList();loadDashboard();});}
 function loadPEList(){
   fetch('/list').then(r=>r.json()).then(list=>{
     const el=document.getElementById('pe-list');
     if(!list.length){el.innerHTML='<span class="empty-msg">No hay PEs registrados aún</span>';return;}
-    el.innerHTML=`<table class="dt"><thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th></tr></thead><tbody>${list.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.fecha_oficializacion}</td><td>${p.buque}</td><td>${p.pais_destino}</td></tr>`).join('')}</tbody></table>`;
+    el.innerHTML=`<table class="dt"><thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th><th>Booking</th><th></th></tr></thead><tbody>
+      ${list.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.fecha_oficializacion}</td><td>${p.buque}</td><td>${p.pais_destino}</td>
+      <td>${p.booking?`<strong style="color:#217346">${p.booking}</strong>`:'<span style="color:#aaa">—</span>'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deletePE('${p.nro_pe}')">✕</button></td></tr>`).join('')}
+    </tbody></table>`;
   });
 }
 
@@ -363,24 +358,150 @@ function confirmSol(){
       btn.disabled=false;
       if(res.error){document.getElementById('sol-alert').innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`;document.getElementById('sol-status').textContent='';return;}
       document.getElementById('sol-alert').innerHTML=`<div class="alert alert-success">✅ Solicitud guardada.</div>`;
-      document.getElementById('sol-status').textContent='';loadSolList();setTimeout(resetSol,3000);
+      document.getElementById('sol-status').textContent='';loadSolList();loadDashboard();setTimeout(resetSol,3000);
     }).catch(e=>{btn.disabled=false;document.getElementById('sol-status').textContent='Error: '+e.message});
 }
 function resetSol(){document.getElementById('sol-preview').style.display='none';document.getElementById('sol-file').value='';solData=null;}
+function deleteSol(id){if(!confirm('¿Eliminar?'))return;fetch(`/solicitud/delete/${id}`,{method:'DELETE'}).then(()=>{loadSolList();loadDashboard();});}
 function loadSolList(){
   fetch('/solicitud/list').then(r=>r.json()).then(list=>{
     const el=document.getElementById('sol-list');
     if(!list.length){el.innerHTML='<span class="empty-msg">No hay solicitudes registradas aún</span>';return;}
-    el.innerHTML=`<table class="dt"><thead><tr><th>Buque</th><th>Destino</th><th>Producto</th><th>Tn</th><th>DJVE</th><th>Fecha Sol.</th><th>Estado</th><th></th></tr></thead><tbody>
-      ${list.map(s=>`<tr><td>${s.buque||'-'}</td><td>${s.destino||'-'}</td><td>${s.producto||'-'}</td><td>${s.cantidad_tn||'-'}</td><td>${s.djve||'-'}</td><td>${s.fecha_solicitud||'-'}</td>
+    el.innerHTML=`<table class="dt"><thead><tr><th>Buque</th><th>Destino</th><th>Producto</th><th>Tn</th><th>DJVE</th><th>Booking</th><th>Fecha Sol.</th><th>Estado</th><th></th></tr></thead><tbody>
+      ${list.map(s=>`<tr><td>${s.buque||'-'}</td><td>${s.destino||'-'}</td><td>${s.producto||'-'}</td><td>${s.cantidad_tn||'-'}</td><td>${s.djve||'-'}</td><td>${s.booking||'-'}</td><td>${s.fecha_solicitud||'-'}</td>
       <td><span class="badge ${s.tiene_pe?'badge-ok':'badge-pending'}">${s.tiene_pe?'✅ PE Generado':'⏳ Pendiente'}</span></td>
       <td><button class="btn btn-danger btn-sm" onclick="deleteSol(${s.id})">✕</button></td></tr>`).join('')}
     </tbody></table>`;
   });
 }
-function deleteSol(id){if(!confirm('¿Eliminar?'))return;fetch(`/solicitud/delete/${id}`,{method:'DELETE'}).then(()=>loadSolList());}
 
-// ---- Generic ----
+// ==================== Plan de Cargas ====================
+let planData=null;
+
+setupDrop('plan-drop','plan-file',uploadPlan);
+function uploadPlan(file){
+  document.getElementById('plan-preview').style.display='none';
+  document.getElementById('plan-loader').style.display='block';
+  document.getElementById('plan-result').innerHTML='';
+  const fd=new FormData();fd.append('excel',file);
+  fetch('/plan/upload',{method:'POST',body:fd}).then(r=>r.json()).then(data=>{
+    document.getElementById('plan-loader').style.display='none';
+    if(data.error){alert('Error: '+data.error);return;}
+    planData=data;
+    const rows=data.rows.slice(0,5);
+    let html=`<table class="dt" style="margin-bottom:10px"><thead><tr><th>Semana</th><th>Buque</th><th>Booking</th><th>Contrato</th><th>Producto</th><th>Cont.</th><th>Fecha Carga</th><th>POD</th><th>ETD</th></tr></thead><tbody>`;
+    html+=rows.map(r=>`<tr><td>${r.semana||'-'}</td><td>${r.buque||'-'}</td><td><strong>${r.booking||'-'}</strong></td><td>${r.contrato||'-'}</td><td>${r.producto||'-'}</td><td>${r.cantidad_contenedores||'-'}</td><td>${r.fecha_carga||'-'}</td><td>${r.pod||'-'}</td><td>${r.etd||'-'}</td></tr>`).join('');
+    if(data.count>5) html+=`<tr><td colspan="9" style="text-align:center;color:#888;font-style:italic">... y ${data.count-5} filas más</td></tr>`;
+    html+='</tbody></table>';
+    document.getElementById('plan-summary').innerHTML=`Se encontraron <strong>${data.count}</strong> filas. Vista previa (primeras 5):<br><br>`+html;
+    document.getElementById('plan-preview').style.display='block';
+    document.getElementById('plan-status').textContent='';
+    document.getElementById('plan-preview').scrollIntoView({behavior:'smooth'});
+  }).catch(e=>{document.getElementById('plan-loader').style.display='none';alert('Error: '+e.message)});
+}
+function confirmPlan(){
+  const btn=document.getElementById('plan-confirm-btn');
+  btn.disabled=true;document.getElementById('plan-status').textContent='Guardando...';
+  fetch('/plan/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows:planData.rows})})
+    .then(r=>r.json()).then(res=>{
+      btn.disabled=false;
+      if(res.error){document.getElementById('plan-alert').innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`;document.getElementById('plan-status').textContent='';return;}
+      document.getElementById('plan-alert').innerHTML=`<div class="alert alert-success">✅ ${res.inserted} filas guardadas${res.skipped?`, ${res.skipped} ya existían`:''}.`;
+      document.getElementById('plan-status').textContent='';loadPlanList();loadDashboard();setTimeout(resetPlan,4000);
+    }).catch(e=>{btn.disabled=false;document.getElementById('plan-status').textContent='Error: '+e.message});
+}
+function resetPlan(){document.getElementById('plan-preview').style.display='none';document.getElementById('plan-file').value='';planData=null;document.getElementById('plan-result').innerHTML='';}
+function deletePlan(id){if(!confirm('¿Eliminar?'))return;fetch(`/plan/delete/${id}`,{method:'DELETE'}).then(()=>{loadPlanList();loadDashboard();});}
+function loadPlanList(){
+  fetch('/plan/list').then(r=>r.json()).then(list=>{
+    const el=document.getElementById('plan-list');
+    if(!list.length){el.innerHTML='<span class="empty-msg">No hay bookings registrados aún</span>';return;}
+    el.innerHTML=`<table class="dt"><thead><tr><th>Semana</th><th>Buque</th><th>Booking</th><th>Contrato</th><th>Producto</th><th>Cont.</th><th>POD</th><th>Fecha Carga</th><th>ETD</th><th>Solicitud</th><th>PE</th><th></th></tr></thead><tbody>
+      ${list.map(r=>`<tr>
+        <td>${r.semana||'-'}</td><td>${r.buque||'-'}</td><td><strong>${r.booking||'-'}</strong></td>
+        <td>${r.contrato||'-'}</td><td>${r.producto||'-'}</td><td>${r.cantidad_contenedores||'-'}</td>
+        <td>${r.pod||'-'}</td><td>${r.fecha_carga||'-'}</td><td>${r.etd||'-'}</td>
+        <td style="text-align:center">${r.tiene_solicitud?'✅':'—'}</td>
+        <td style="text-align:center">${r.tiene_pe?'✅':'—'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deletePlan(${r.id})">✕</button></td>
+      </tr>`).join('')}
+    </tbody></table>`;
+  });
+}
+
+// ==================== Buscador ====================
+let searchTimeout=null;
+function searchDebounce(){clearTimeout(searchTimeout);searchTimeout=setTimeout(doSearch,400);}
+function doSearch(){
+  const q=document.getElementById('search-input').value.trim();
+  const el=document.getElementById('search-results');
+  if(!q||q.length<2){el.innerHTML='';return;}
+  el.innerHTML='<span class="empty-msg">Buscando...</span>';
+  fetch(`/search?q=${encodeURIComponent(q)}`).then(r=>r.json()).then(data=>{
+    const total=data.pes.length+data.solicitudes.length+data.plan.length;
+    if(total===0){el.innerHTML=`<span class="empty-msg">No se encontraron resultados para "${q}"</span>`;return;}
+    let html='';
+    if(data.pes.length){
+      html+=`<div style="margin-bottom:18px"><h3 style="font-size:0.9rem;color:#1F4E79;margin-bottom:8px">📋 Permisos de Exportación (${data.pes.length})</h3>
+      <table class="dt"><thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th><th>Toneladas</th><th>FOB (USD)</th><th>DJVE</th><th>Vto. Embarque</th></tr></thead><tbody>
+      ${data.pes.map(p=>`<tr><td><strong>${p.nro_pe||'-'}</strong></td><td>${p.fecha_oficializacion||'-'}</td><td>${p.buque||'-'}</td><td>${p.pais_destino||'-'}</td><td>${p.toneladas||'-'}</td><td>${p.fob_total_usd||'-'}</td><td>${p.djve||'-'}</td><td>${p.vto_embarque||'-'}</td></tr>`).join('')}
+      </tbody></table></div>`;
+    }
+    if(data.solicitudes.length){
+      html+=`<div style="margin-bottom:18px"><h3 style="font-size:0.9rem;color:#217346;margin-bottom:8px">📥 Solicitudes Bunge (${data.solicitudes.length})</h3>
+      <table class="dt"><thead><tr><th>Buque</th><th>Producto</th><th>Cantidad (Tn)</th><th>DJVE</th><th>Booking</th><th>Fecha Sol.</th><th>Importe (USD)</th></tr></thead><tbody>
+      ${data.solicitudes.map(s=>`<tr><td>${s.buque||'-'}</td><td>${s.producto||'-'}</td><td>${s.cantidad_tn||'-'}</td><td>${s.djve||'-'}</td><td>${s.booking||'-'}</td><td>${s.fecha_solicitud||'-'}</td><td>${s.importe_total_usd||'-'}</td></tr>`).join('')}
+      </tbody></table></div>`;
+    }
+    if(data.plan.length){
+      html+=`<div style="margin-bottom:18px"><h3 style="font-size:0.9rem;color:#7B3F00;margin-bottom:8px">📦 Plan de Cargas (${data.plan.length})</h3>
+      <table class="dt"><thead><tr><th>Semana</th><th>Buque</th><th>Booking</th><th>Contrato</th><th>Producto</th><th>Cont.</th><th>Fecha Carga</th><th>POD</th><th>ETD</th></tr></thead><tbody>
+      ${data.plan.map(r=>`<tr><td>${r.semana||'-'}</td><td>${r.buque||'-'}</td><td><strong>${r.booking||'-'}</strong></td><td>${r.contrato||'-'}</td><td>${r.producto||'-'}</td><td>${r.cantidad_contenedores||'-'}</td><td>${r.fecha_carga||'-'}</td><td>${r.pod||'-'}</td><td>${r.etd||'-'}</td></tr>`).join('')}
+      </tbody></table></div>`;
+    }
+    el.innerHTML=html;
+  }).catch(e=>{el.innerHTML=`<span class="empty-msg">Error: ${e.message}</span>`;});
+}
+
+// ==================== Dashboard ====================
+function loadDashboard(){
+  fetch('/dashboard').then(r=>r.json()).then(d=>{
+    const el=document.getElementById('dash-content');
+    if(!el)return;
+    let html=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+      ${[
+        {label:'PEs Registrados',val:d.total_pes,color:'#1F4E79',icon:'📋'},
+        {label:'Solicitudes Bunge',val:d.total_sol,color:'#217346',icon:'📥'},
+        {label:'Pendientes de PE',val:d.sol_sin_pe,color:d.sol_sin_pe>0?'#c0392b':'#217346',icon:'⏳'},
+        {label:'Plan de Cargas',val:d.total_plan,color:'#7B3F00',icon:'📦'}
+      ].map(s=>`<div class="stat-card" style="border-left:4px solid ${s.color}">
+        <div style="font-size:0.78rem;color:#666;margin-bottom:4px">${s.icon} ${s.label}</div>
+        <div style="font-size:1.8rem;font-weight:700;color:${s.color}">${s.val}</div>
+      </div>`).join('')}
+    </div>`;
+    if(d.pes_vencer&&d.pes_vencer.length){
+      html+=`<div class="stat-card" style="margin-bottom:14px">
+        <h3 style="font-size:0.9rem;color:#c0392b;margin-bottom:10px">⚠️ PEs con vencimiento próximo o vencidos</h3>
+        <table class="dt"><thead><tr><th>Nº PE</th><th>Buque</th><th>Destino</th><th>Vto. Embarque</th><th>Estado</th></tr></thead><tbody>
+        ${d.pes_vencer.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.buque}</td><td>${p.pais_destino}</td><td>${p.vto_embarque}</td>
+        <td><span class="badge" style="${p.dias<0?'background:#f8d7da;color:#842029':'background:#fff3cd;color:#856404'}">${p.dias<0?'⛔ Vencido hace '+Math.abs(p.dias)+' días':'⚠️ Vence en '+p.dias+' días'}</span></td></tr>`).join('')}
+        </tbody></table></div>`;
+    }
+    html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="stat-card"><h3 style="font-size:0.9rem;color:#1F4E79;margin-bottom:10px">📋 Últimos PEs cargados</h3>
+        <table class="dt"><thead><tr><th>Nº PE</th><th>Buque</th><th>Fecha</th></tr></thead><tbody>
+        ${d.ultimos_pes.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.buque}</td><td>${p.fecha_oficializacion}</td></tr>`).join('')}
+        </tbody></table></div>
+      <div class="stat-card"><h3 style="font-size:0.9rem;color:#217346;margin-bottom:10px">📥 Últimas solicitudes</h3>
+        <table class="dt"><thead><tr><th>Buque</th><th>Tn</th><th>Fecha</th></tr></thead><tbody>
+        ${d.ultimas_sol.map(s=>`<tr><td>${s.buque}</td><td>${s.cantidad_tn}</td><td>${s.fecha_solicitud}</td></tr>`).join('')}
+        </tbody></table></div>
+    </div>`;
+    el.innerHTML=html;
+  }).catch(e=>{const el=document.getElementById('dash-content');if(el)el.innerHTML='<span class="empty-msg">Error cargando dashboard</span>';});
+}
+
+// ---- Generic preview ----
 function showPreview(prefix,data,labels){
   const grid=document.getElementById(prefix+'-grid');grid.innerHTML='';
   Object.keys(labels).forEach(key=>{
@@ -400,125 +521,12 @@ function syncFields(prefix,labels,obj){Object.keys(labels).forEach(key=>{const e
 // ---- Init ----
 checkGmailStatus();
 loadPEList();
+loadDashboard();
 
-// Handle OAuth redirect
 if(new URLSearchParams(window.location.search).get('gmail')==='ok'){
   history.replaceState({},'','/');
   checkGmailStatus();
 }
-
-// ==================== Dashboard ====================
-
-// ==================== Buscador ====================
-let searchTimeout = null;
-
-function searchDebounce() {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(doSearch, 400);
-}
-
-function doSearch() {
-  const q = document.getElementById('search-input').value.trim();
-  const el = document.getElementById('search-results');
-  if(!q || q.length < 2) { el.innerHTML = ''; return; }
-  el.innerHTML = '<span class="empty-msg">Buscando...</span>';
-  fetch(`/search?q=${encodeURIComponent(q)}`).then(r=>r.json()).then(data=>{
-    const total = data.pes.length + data.solicitudes.length + data.plan.length;
-    if(total === 0) { el.innerHTML = '<span class="empty-msg">No se encontraron resultados para "'+q+'"</span>'; return; }
-    let html = '';
-
-    if(data.pes.length) {
-      html += `<div style="margin-bottom:18px">
-        <h3 style="font-size:0.9rem;color:#1F4E79;margin-bottom:8px">📋 Permisos de Exportación (${data.pes.length})</h3>
-        <table class="dt"><thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th><th>Toneladas</th><th>FOB (USD)</th><th>DJVE</th><th>Vto. Embarque</th></tr></thead><tbody>
-        ${data.pes.map(p=>`<tr>
-          <td><strong>${p.nro_pe||'-'}</strong></td><td>${p.fecha_oficializacion||'-'}</td>
-          <td>${p.buque||'-'}</td><td>${p.pais_destino||'-'}</td>
-          <td>${p.toneladas||'-'}</td><td>${p.fob_total_usd||'-'}</td>
-          <td>${p.djve||'-'}</td><td>${p.vto_embarque||'-'}</td>
-        </tr>`).join('')}
-        </tbody></table></div>`;
-    }
-
-    if(data.solicitudes.length) {
-      html += `<div style="margin-bottom:18px">
-        <h3 style="font-size:0.9rem;color:#217346;margin-bottom:8px">📥 Solicitudes Bunge (${data.solicitudes.length})</h3>
-        <table class="dt"><thead><tr><th>Buque</th><th>Producto</th><th>Cantidad (Tn)</th><th>DJVE</th><th>Booking</th><th>Fecha Sol.</th><th>Importe (USD)</th></tr></thead><tbody>
-        ${data.solicitudes.map(s=>`<tr>
-          <td>${s.buque||'-'}</td><td>${s.producto||'-'}</td><td>${s.cantidad_tn||'-'}</td>
-          <td>${s.djve||'-'}</td><td>${s.booking||'-'}</td>
-          <td>${s.fecha_solicitud||'-'}</td><td>${s.importe_total_usd||'-'}</td>
-        </tr>`).join('')}
-        </tbody></table></div>`;
-    }
-
-    if(data.plan.length) {
-      html += `<div style="margin-bottom:18px">
-        <h3 style="font-size:0.9rem;color:#7B3F00;margin-bottom:8px">📦 Plan de Cargas (${data.plan.length})</h3>
-        <table class="dt"><thead><tr><th>Semana</th><th>Buque</th><th>Booking</th><th>Producto</th><th>Cont.</th><th>POD</th><th>ETD</th></tr></thead><tbody>
-        ${data.plan.map(r=>`<tr>
-          <td>${r.semana||'-'}</td><td>${r.buque||'-'}</td><td><strong>${r.booking||'-'}</strong></td>
-          <td>${r.producto||'-'}</td><td>${r.cantidad_contenedores||'-'}</td>
-          <td>${r.pod||'-'}</td><td>${r.etd||'-'}</td>
-        </tr>`).join('')}
-        </tbody></table></div>`;
-    }
-
-    el.innerHTML = html;
-  }).catch(e => { el.innerHTML = `<span class="empty-msg">Error: ${e.message}</span>`; });
-}
-
-function loadDashboard() {
-  fetch('/dashboard').then(r=>r.json()).then(d=>{
-    const el = document.getElementById('dash-content');
-    if(!el) return;
-    let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
-      ${[
-        {label:'PEs Registrados', val:d.total_pes, color:'#1F4E79', icon:'📋'},
-        {label:'Solicitudes Bunge', val:d.total_sol, color:'#217346', icon:'📥'},
-        {label:'Pendientes de PE', val:d.sol_sin_pe, color: d.sol_sin_pe>0?'#c0392b':'#217346', icon:'⏳'},
-        {label:'Plan de Cargas', val:d.total_plan, color:'#7B3F00', icon:'📦'}
-      ].map(s=>`<div style="background:white;border-radius:8px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.08);border-left:4px solid ${s.color}">
-        <div style="font-size:0.78rem;color:#666;margin-bottom:4px">${s.icon} ${s.label}</div>
-        <div style="font-size:1.8rem;font-weight:700;color:${s.color}">${s.val}</div>
-      </div>`).join('')}
-    </div>`;
-
-    if(d.pes_vencer && d.pes_vencer.length) {
-      html += `<div style="background:white;border-radius:8px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.08);margin-bottom:14px">
-        <h3 style="font-size:0.9rem;color:#c0392b;margin-bottom:10px">⚠️ PEs con vencimiento próximo o vencidos</h3>
-        <table class="dt"><thead><tr><th>Nº PE</th><th>Buque</th><th>Destino</th><th>Vto. Embarque</th><th>Estado</th></tr></thead><tbody>
-        ${d.pes_vencer.map(p=>`<tr>
-          <td><strong>${p.nro_pe}</strong></td><td>${p.buque}</td><td>${p.pais_destino}</td><td>${p.vto_embarque}</td>
-          <td><span class="badge" style="${p.dias<0?'background:#f8d7da;color:#842029':'background:#fff3cd;color:#856404'}">${p.dias<0?'⛔ Vencido hace '+Math.abs(p.dias)+' días':'⚠️ Vence en '+p.dias+' días'}</span></td>
-        </tr>`).join('')}
-        </tbody></table></div>`;
-    }
-
-    html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-      <div style="background:white;border-radius:8px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
-        <h3 style="font-size:0.9rem;color:#1F4E79;margin-bottom:10px">📋 Últimos PEs cargados</h3>
-        <table class="dt"><thead><tr><th>Nº PE</th><th>Buque</th><th>Fecha</th></tr></thead><tbody>
-        ${d.ultimos_pes.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.buque}</td><td>${p.fecha_oficializacion}</td></tr>`).join('')}
-        </tbody></table>
-      </div>
-      <div style="background:white;border-radius:8px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
-        <h3 style="font-size:0.9rem;color:#217346;margin-bottom:10px">📥 Últimas solicitudes</h3>
-        <table class="dt"><thead><tr><th>Buque</th><th>Tn</th><th>Fecha</th></tr></thead><tbody>
-        ${d.ultimas_sol.map(s=>`<tr><td>${s.buque}</td><td>${s.cantidad_tn}</td><td>${s.fecha_solicitud}</td></tr>`).join('')}
-        </tbody></table>
-      </div>
-    </div>`;
-
-    el.innerHTML = html;
-  }).catch(e => {
-    const el = document.getElementById('dash-content');
-    if(el) el.innerHTML = '<span class="empty-msg">Error cargando dashboard</span>';
-  });
-}
-
-loadDashboard();
-
 </script>
 </body>
 </html>
