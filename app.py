@@ -5,6 +5,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 import anthropic
 import tempfile
+from plan_cargas_parser import parse_plan_cargas
 from gmail_helper import (
     get_flow, get_credentials, save_credentials, get_gmail_service,
     get_pdf_attachments_from_message, fetch_new_emails,
@@ -42,6 +43,11 @@ FIELDS_SOL = [
     "djve", "contrato", "cond_venta", "precio_fob_usd_tn",
     "importe_total_usd", "fecha_solicitud", "fecha_vta", "booking"
 ]
+FIELDS_PC = [
+    "semana", "buque", "booking", "producto", "consignee",
+    "cantidad_contenedores", "toneladas", "pod", "etd", "fecha_carga",
+    "contrato", "envase", "linea"
+]
 
 # ---------- DB ----------
 
@@ -70,6 +76,10 @@ def init_db():
             {', '.join(f'{f} TEXT' for f in FIELDS_SOL)},
             gmail_msg_id TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+        db.execute(f"""CREATE TABLE IF NOT EXISTS plan_cargas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            {', '.join(f'{f} TEXT' for f in FIELDS_PC)},
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
         db.commit()
         count = db.execute("SELECT COUNT(*) FROM permisos").fetchone()[0]
         if count == 0:
@@ -85,7 +95,7 @@ def init_db():
             db.executemany(f"INSERT INTO permisos ({','.join(FIELDS_PE)}) VALUES ({ph})", seed)
             db.commit()
 
-# ---------- Excel ----------
+# ---------- Excel builder ----------
 
 def _border():
     t = Side(style="thin")
@@ -98,14 +108,16 @@ def _hcell(cell, text):
     cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     cell.border = _border()
 
-def build_excel(pe_rows, sol_rows):
+def build_excel(pe_rows, sol_rows, pc_rows):
     wb = Workbook()
+    fills = [PatternFill("solid", start_color="DCE6F1"), PatternFill("solid", start_color="FFFFFF")]
+
+    # ---- Hoja PEs ----
     ws1 = wb.active
     ws1.title = "Permisos de Exportación"
     for col, h in enumerate(HEADERS_PE, 1):
         _hcell(ws1.cell(row=1, column=col), h)
     ws1.row_dimensions[1].height = 35
-    fills = [PatternFill("solid", start_color="DCE6F1"), PatternFill("solid", start_color="FFFFFF")]
     for r, row in enumerate(pe_rows, 2):
         for c, f in enumerate(FIELDS_PE, 1):
             val = row[f]
@@ -114,13 +126,11 @@ def build_excel(pe_rows, sol_rows):
             cell = ws1.cell(row=r, column=c, value=val)
             cell.font = Font(name="Arial", size=10)
             cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.border = _border()
-            cell.fill = fills[r % 2]
+            cell.border = _border(); cell.fill = fills[r % 2]
     tr = len(pe_rows)+2
     for col in range(1, len(HEADERS_PE)+1):
         cell = ws1.cell(row=tr, column=col)
-        cell.fill = PatternFill("solid", start_color="BDD7EE")
-        cell.border = _border()
+        cell.fill = PatternFill("solid", start_color="BDD7EE"); cell.border = _border()
         cell.font = Font(name="Arial", bold=True, size=10)
         cell.alignment = Alignment(horizontal="center", vertical="center")
     ws1.cell(row=tr, column=1).value = "TOTALES"
@@ -131,9 +141,10 @@ def build_excel(pe_rows, sol_rows):
         ws1.column_dimensions[get_column_letter(i)].width = w
     ws1.freeze_panes = "A2"
 
+    # ---- Hoja Solicitudes ----
     ws2 = wb.create_sheet("Solicitudes Bunge")
-    for col, h in enumerate(HEADERS_SOL, 1):
-        _hcell(ws2.cell(row=1, column=col), h)
+    HEADERS_SOL_FULL = ["Buque","Bandera","Destino","Producto","Cantidad (Tn)","DJVE","Contrato","Cond. Venta","Precio FOB (USD/Tn)","Importe Total (USD)","Fecha Solicitud","Fecha Vta.","Booking","Estado PE"]
+    for col, h in enumerate(HEADERS_SOL_FULL, 1): _hcell(ws2.cell(row=1, column=col), h)
     ws2.row_dimensions[1].height = 35
     pe_djves = set(str(r["djve"] or "").strip() for r in pe_rows)
     pe_buques = set(str(r["buque"] or "").strip().upper() for r in pe_rows)
@@ -151,16 +162,45 @@ def build_excel(pe_rows, sol_rows):
             cell = ws2.cell(row=r, column=c, value=val)
             cell.font = Font(name="Arial", size=10)
             cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.border = _border()
-            cell.fill = rf
+            cell.border = _border(); cell.fill = rf
         ec = ws2.cell(row=r, column=len(FIELDS_SOL)+1, value="✅ PE Generado" if tiene_pe else "⏳ Pendiente")
         ec.font = Font(name="Arial", bold=True, size=10)
         ec.alignment = Alignment(horizontal="center", vertical="center")
-        ec.border = _border()
-        ec.fill = rf
+        ec.border = _border(); ec.fill = rf
     for i, w in enumerate([20,12,14,25,14,22,14,12,18,18,16,14,16,16],1):
         ws2.column_dimensions[get_column_letter(i)].width = w
     ws2.freeze_panes = "A2"
+
+    # ---- Hoja Plan de Cargas ----
+    ws3 = wb.create_sheet("Plan de Cargas")
+    HEADERS_PC_FULL = ["Semana","Buque","Booking","Producto","Consignee","Contenedores","Toneladas","Destino (POD)","ETD","Fecha Carga","Contrato","Envase","Línea","Solicitud","PE"]
+    for col, h in enumerate(HEADERS_PC_FULL, 1): _hcell(ws3.cell(row=1, column=col), h)
+    ws3.row_dimensions[1].height = 35
+    sol_bookings = set(str(r["booking"] or "").strip() for r in sol_rows if r["booking"])
+    sol_buques = set(str(r["buque"] or "").strip().upper() for r in sol_rows)
+    for r, row in enumerate(pc_rows, 2):
+        booking = str(row["booking"] or "").strip()
+        buque = str(row["buque"] or "").strip().upper()
+        tiene_sol = booking in sol_bookings or buque in sol_buques
+        tiene_pe = buque in pe_buques
+        if tiene_pe: rf = gf
+        elif tiene_sol: rf = PatternFill("solid", start_color="DDEBF7")
+        else: rf = yf
+        for c, f in enumerate(FIELDS_PC, 1):
+            cell = ws3.cell(row=r, column=c, value=str(row[f]) if row[f] else None)
+            cell.font = Font(name="Arial", size=10)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = _border(); cell.fill = rf
+        ws3.cell(row=r, column=14, value="✅" if tiene_sol else "—").fill = rf
+        ws3.cell(row=r, column=15, value="✅" if tiene_pe else "—").fill = rf
+        for c in [14, 15]:
+            ws3.cell(row=r, column=c).font = Font(name="Arial", size=10)
+            ws3.cell(row=r, column=c).alignment = Alignment(horizontal="center", vertical="center")
+            ws3.cell(row=r, column=c).border = _border()
+    for i, w in enumerate([14,20,18,30,16,14,12,16,12,12,14,14,14,12,10],1):
+        ws3.column_dimensions[get_column_letter(i)].width = w
+    ws3.freeze_panes = "A2"
+
     tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
     wb.save(tmp.name)
     return tmp.name
@@ -302,7 +342,6 @@ def upload():
     exists = db.execute("SELECT 1 FROM permisos WHERE nro_pe=?", (data.get("nro_pe",""),)).fetchone()
     data["already_exists"] = exists is not None
     djve = str(data.get("djve") or "").strip()
-    buque = str(data.get("buque") or "").strip().upper()
     toneladas = str(data.get("toneladas") or "").strip()
     sol = None
     if djve and toneladas:
@@ -410,12 +449,74 @@ def solicitud_delete(sol_id):
     db.commit()
     return jsonify({"ok": True})
 
+# ---------- Routes Plan de Cargas ----------
+
+@app.route("/plan/upload", methods=["POST"])
+def plan_upload():
+    if "excel" not in request.files:
+        return jsonify({"error": "No se recibió archivo"}), 400
+    file_bytes = request.files["excel"].read()
+    try:
+        rows = parse_plan_cargas(file_bytes)
+    except Exception as e:
+        return jsonify({"error": f"Error procesando Excel: {str(e)}"}), 500
+    if not rows:
+        return jsonify({"error": "No se encontraron datos en el archivo"}), 400
+    return jsonify({"rows": rows, "count": len(rows)})
+
+@app.route("/plan/confirm", methods=["POST"])
+def plan_confirm():
+    rows = request.json.get("rows", [])
+    db = get_db()
+    ph = ','.join(['?']*len(FIELDS_PC))
+    inserted = 0
+    skipped = 0
+    for row in rows:
+        booking = row.get("booking")
+        if booking:
+            exists = db.execute("SELECT 1 FROM plan_cargas WHERE booking=?", (booking,)).fetchone()
+            if exists:
+                skipped += 1
+                continue
+        vals = [str(row.get(f,'')) if row.get(f) is not None else None for f in FIELDS_PC]
+        db.execute(f"INSERT INTO plan_cargas ({','.join(FIELDS_PC)}) VALUES ({ph})", vals)
+        inserted += 1
+    db.commit()
+    return jsonify({"ok": True, "inserted": inserted, "skipped": skipped})
+
+@app.route("/plan/list")
+def plan_list():
+    db = get_db()
+    rows = db.execute(f"SELECT {','.join(FIELDS_PC)}, id FROM plan_cargas ORDER BY etd DESC, id DESC").fetchall()
+    sol_bookings = set(str(r[0] or "").strip() for r in db.execute("SELECT booking FROM solicitudes WHERE booking IS NOT NULL").fetchall())
+    sol_buques = set(str(r[0] or "").strip().upper() for r in db.execute("SELECT buque FROM solicitudes WHERE buque IS NOT NULL").fetchall())
+    pe_buques = set(str(r[0] or "").strip().upper() for r in db.execute("SELECT buque FROM permisos WHERE buque IS NOT NULL").fetchall())
+    result = []
+    for row in rows:
+        d = dict(row)
+        booking = str(d.get("booking") or "").strip()
+        buque = str(d.get("buque") or "").strip().upper()
+        d["tiene_solicitud"] = booking in sol_bookings or buque in sol_buques
+        d["tiene_pe"] = buque in pe_buques
+        result.append(d)
+    return jsonify(result)
+
+@app.route("/plan/delete/<int:row_id>", methods=["DELETE"])
+def plan_delete(row_id):
+    db = get_db()
+    db.execute("DELETE FROM plan_cargas WHERE id=?", (row_id,))
+    db.commit()
+    return jsonify({"ok": True})
+
+# ---------- Download ----------
+
 @app.route("/download")
 def download():
     db = get_db()
     pe_rows = db.execute(f"SELECT {','.join(FIELDS_PE)} FROM permisos ORDER BY fecha_oficializacion, nro_pe").fetchall()
     sol_rows = db.execute(f"SELECT {','.join(FIELDS_SOL)} FROM solicitudes ORDER BY fecha_solicitud DESC").fetchall()
-    path = build_excel(pe_rows, sol_rows)
+    pc_rows = db.execute(f"SELECT {','.join(FIELDS_PC)} FROM plan_cargas ORDER BY etd DESC").fetchall()
+    path = build_excel(pe_rows, sol_rows, pc_rows)
     return send_file(path, as_attachment=True, download_name="permisos_exportacion.xlsx")
 
 with app.app_context():
