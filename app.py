@@ -345,7 +345,7 @@ def upload():
     toneladas = str(data.get("toneladas") or "").strip()
     sol = None
     if djve and toneladas:
-        sol = db.execute("SELECT booking, buque, fecha_solicitud FROM solicitudes WHERE djve=? AND CAST(cantidad_tn AS INTEGER)=CAST(? AS INTEGER)", (djve, toneladas)).fetchone()
+        sol = db.execute("SELECT booking, buque, fecha_solicitud FROM solicitudes WHERE djve=? AND ROUND(CAST(cantidad_tn AS REAL))=ROUND(CAST(? AS REAL))", (djve, toneladas)).fetchone()
     if not sol and djve:
         sol = db.execute("SELECT booking, buque, fecha_solicitud FROM solicitudes WHERE djve=?", (djve,)).fetchone()
     data["solicitud_match"] = dict(sol) if sol else None
@@ -377,7 +377,7 @@ def list_pes():
         toneladas = str(d.get("toneladas") or "").strip()
         sol = None
         if djve and toneladas:
-            sol = db.execute("SELECT booking FROM solicitudes WHERE djve=? AND CAST(cantidad_tn AS INTEGER)=CAST(? AS INTEGER)", (djve, toneladas)).fetchone()
+            sol = db.execute("SELECT booking FROM solicitudes WHERE djve=? AND ROUND(CAST(cantidad_tn AS REAL))=ROUND(CAST(? AS REAL))", (djve, toneladas)).fetchone()
         if not sol and djve:
             sol = db.execute("SELECT booking FROM solicitudes WHERE djve=?", (djve,)).fetchone()
         d["booking"] = sol["booking"] if sol and sol["booking"] else None
@@ -435,7 +435,7 @@ def list_solicitudes():
         cant_sol = str(d.get("cantidad_tn") or "").strip()
         tiene_pe = False
         if djve_sol and cant_sol:
-            tiene_pe = bool(db.execute("SELECT 1 FROM permisos WHERE djve=? AND CAST(toneladas AS INTEGER)=CAST(? AS INTEGER)", (djve_sol, cant_sol)).fetchone())
+            tiene_pe = bool(db.execute("SELECT 1 FROM permisos WHERE djve=? AND ROUND(CAST(toneladas AS REAL))=ROUND(CAST(? AS REAL))", (djve_sol, cant_sol)).fetchone())
         d["tiene_pe"] = tiene_pe
         result.append(d)
     return jsonify(result)
