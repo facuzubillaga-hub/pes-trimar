@@ -496,8 +496,15 @@ def plan_list():
         d = dict(row)
         booking = str(d.get("booking") or "").strip()
         buque = str(d.get("buque") or "").strip().upper()
-        d["tiene_solicitud"] = booking in sol_bookings or buque in sol_buques
-        d["tiene_pe"] = buque in pe_buques
+def fuzzy_match(name, name_set):
+            if name in name_set:
+                return True
+            for s in name_set:
+                if s and (s in name or name in s):
+                    return True
+            return False
+        d["tiene_solicitud"] = booking in sol_bookings or fuzzy_match(buque, sol_buques)
+        d["tiene_pe"] = fuzzy_match(buque, pe_buques)
         result.append(d)
     return jsonify(result)
 
