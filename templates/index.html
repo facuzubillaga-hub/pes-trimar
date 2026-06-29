@@ -1,191 +1,546 @@
-{% extends "base.html" %}
-{% block title %}Trimar · Panel PE{% endblock %}
-{% block content %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestor de PEs — Trimar</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;background:#f0f4f8;color:#1a2a3a;min-height:100vh}
+  header{background:#1F4E79;color:white;padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+  header h1{font-size:1rem;font-weight:700}
+  header span{font-size:0.75rem;opacity:0.75}
+  .gmail-bar{background:#e8f0fb;border-bottom:2px solid #BDD7EE;padding:8px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:0.82rem}
+  .gmail-bar strong{color:#1F4E79}
+  .container{max-width:1100px;margin:16px auto;padding:0 12px}
+  .tabs{display:flex;gap:3px;flex-wrap:wrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .tab-btn{padding:9px 14px;border-radius:8px 8px 0 0;border:none;cursor:pointer;font-size:0.8rem;font-weight:600;background:#d0dce8;color:#3a5068;transition:all 0.15s;white-space:nowrap}
+  .tab-btn.active{background:white;color:#1F4E79;border-bottom:3px solid #1F4E79}
+  .tab-content{display:none}.tab-content.active{display:block}
+  .card{background:white;border-radius:0 8px 8px 8px;box-shadow:0 2px 10px rgba(0,0,0,0.08);padding:16px;margin-bottom:14px}
+  .card-inner{background:white;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.08);padding:16px;margin-bottom:14px}
+  .card h2,.card-inner h2{font-size:0.92rem;color:#1F4E79;margin-bottom:12px;border-bottom:2px solid #BDD7EE;padding-bottom:7px}
+  .drop-zone{border:2px dashed #BDD7EE;border-radius:8px;padding:24px 14px;text-align:center;cursor:pointer;transition:all 0.2s;background:#f7fbff}
+  .drop-zone:hover,.drop-zone.drag-over{border-color:#1F4E79;background:#e8f0fb}
+  .drop-zone p{color:#555;font-size:0.85rem}.drop-zone p strong{color:#1F4E79}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:6px;font-size:0.84rem;font-weight:600;border:none;cursor:pointer;transition:all 0.15s;text-decoration:none;touch-action:manipulation}
+  .btn-primary{background:#1F4E79;color:white}.btn-primary:hover{background:#163a5f}
+  .btn-success{background:#217346;color:white}.btn-success:hover{background:#185a36}
+  .btn-outline{background:white;color:#1F4E79;border:2px solid #1F4E79}.btn-outline:hover{background:#e8f0fb}
+  .btn-gmail{background:#EA4335;color:white}.btn-gmail:hover{background:#c5372c}
+  .btn-danger{background:#c0392b;color:white}.btn-danger:hover{background:#a93226}
+  .btn:disabled{opacity:0.5;cursor:not-allowed}
+  .btn-sm{padding:6px 10px;font-size:0.76rem}
+  .loader{display:none;text-align:center;padding:24px}
+  .spinner{width:34px;height:34px;border:4px solid #BDD7EE;border-top-color:#1F4E79;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 10px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .preview-section{display:none}
+  .preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-bottom:14px}
+  @media(max-width:600px){.preview-grid{grid-template-columns:1fr}}
+  .field-group{display:flex;flex-direction:column;gap:3px}
+  .field-group label{font-size:0.68rem;color:#666;font-weight:700;text-transform:uppercase;letter-spacing:0.4px}
+  .field-group input{border:1px solid #d0d9e3;border-radius:5px;padding:8px 9px;font-size:0.9rem;background:#fafcff;transition:border 0.15s;-webkit-appearance:none}
+  .field-group input:focus{outline:none;border-color:#1F4E79}
+  .field-group input.changed{border-color:#e67e22;background:#fff8f0}
+  .alert{padding:10px 12px;border-radius:6px;font-size:0.82rem;margin-bottom:10px;display:flex;align-items:flex-start;gap:8px}
+  .alert-warning{background:#fff3cd;color:#856404;border:1px solid #ffc107}
+  .alert-danger{background:#f8d7da;color:#842029;border:1px solid #f5c2c7}
+  .alert-success{background:#d1e7dd;color:#0a3622;border:1px solid #a3cfbb}
+  .alert-info{background:#cff4fc;color:#055160;border:1px solid #9eeaf9}
+  .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+  /* Responsive tables - scroll on mobile */
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:6px}
+  table.dt{width:100%;border-collapse:collapse;font-size:0.8rem;min-width:500px}
+  table.dt th{background:#1F4E79;color:white;padding:8px 9px;text-align:left;font-weight:600;white-space:nowrap}
+  table.dt td{padding:7px 9px;border-bottom:1px solid #e8f0fb;vertical-align:middle}
+  table.dt tr:nth-child(even) td{background:#f7fbff}
+  table.dt tr:hover td{background:#e8f0fb}
+  .badge{display:inline-block;padding:3px 8px;border-radius:20px;font-size:0.72rem;font-weight:700}
+  .badge-ok{background:#d1e7dd;color:#0a3622}
+  .badge-pending{background:#fff3cd;color:#856404}
+  .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+  .divider{width:1px;height:22px;background:#d0d9e3;margin:0 3px}
+  .empty-msg{color:#999;font-style:italic;font-size:0.84rem;padding:10px 0;display:block}
+  .gmail-result{margin-top:10px;font-size:0.82rem}
+  .stat-card{background:white;border-radius:8px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
+  /* Dashboard stats grid */
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  @media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:400px){.stats-grid{grid-template-columns:1fr 1fr}}
+  /* Dashboard bottom grid */
+  .dash-bottom{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:700px){.dash-bottom{grid-template-columns:1fr}}
+  /* Search input */
+  .search-bar{display:flex;gap:8px;align-items:center;margin-bottom:16px}
+  .search-bar input{flex:1;border:2px solid #BDD7EE;border-radius:6px;padding:10px 12px;font-size:0.9rem;outline:none;min-width:0;-webkit-appearance:none}
+  .search-bar input:focus{border-color:#1F4E79}
+  footer{text-align:center;color:#aaa;font-size:0.72rem;padding:16px 0 28px}
+</style>
+</head>
+<body>
+<header>
+  <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+  <div><h1>Gestor de Permisos de Exportación</h1><span>Agencia Trimar S.A. — Puerto Quequén</span></div>
+</header>
 
-<div class="page-header">
-  <div>
-    <div class="page-title">Permisos de Embarque</div>
-    <div class="page-subtitle">Puerto Quequén · Bunge Argentina</div>
-  </div>
-  <a href="/nuevo" class="btn btn-primary">＋ Nuevo PE</a>
-</div>
-
-<!-- DASHBOARD -->
-<div class="dash-row">
-  <div class="dash-card">
-    <div class="num">{{ activos }}</div>
-    <div class="lbl">PEs activos</div>
-    <div class="sub">de {{ total }} totales</div>
-  </div>
-  <div class="dash-card trimar">
-    <div class="num">{{ por_trimar }}</div>
-    <div class="lbl">Acción Trimar</div>
-    <div class="sub">requieren intervención</div>
-  </div>
-  <div class="dash-card desp">
-    <div class="num">{{ por_despachante }}</div>
-    <div class="lbl">En despachante</div>
-    <div class="sub">esperando respuesta</div>
-  </div>
-  <div class="dash-card bunge">
-    <div class="num">{{ por_bunge }}</div>
-    <div class="lbl">En Bunge</div>
-    <div class="sub">PE enviado, sin carga</div>
-  </div>
-  <div class="dash-card" style="border-left:3px solid var(--c1)">
-    <div class="num" style="color:var(--c1)">{{ pend_facturar }}</div>
-    <div class="lbl">Sin facturar</div>
-    <div class="sub">cumplidos pendientes</div>
-  </div>
-  <div class="dash-card alerta">
-    <div class="num">{{ alertas }}</div>
-    <div class="lbl">Alertas</div>
-    <div class="sub">sin movimiento +{{ ALERTA_HORAS }}h</div>
-  </div>
-</div>
-
-<!-- FILTROS POR ESTADO -->
-<div class="stats-row">
-  <a href="{{ url_for('index') }}" class="stat-pill {% if not filtro %}active{% endif %}"
-     style="background:#f2f5f8;color:#3a4a58;border-color:{% if not filtro %}#3a4a58{% else %}transparent{% endif %}">
-    <span class="num">{{ contadores.values()|sum }}</span> Todos
-  </a>
-  {% for i,(key,label,_) in enumerate(ESTADOS) %}
-  {% if contadores[key] > 0 or filtro == key %}
-  <a href="{{ url_for('index', estado=key, q=busqueda, despachante=desp_f) }}"
-     class="stat-pill e{{ i }} {% if filtro==key %}active{% endif %}">
-    <span class="num">{{ contadores[key] }}</span> {{ label }}
-  </a>
-  {% endif %}
-  {% endfor %}
-  {% if contadores['ELIMINADO'] > 0 or filtro == 'ELIMINADO' %}
-  <a href="{{ url_for('index', estado='ELIMINADO') }}"
-     class="stat-pill e-elim {% if filtro=='ELIMINADO' %}active{% endif %}">
-    <span class="num">{{ contadores['ELIMINADO'] }}</span> Eliminados
-  </a>
-  {% endif %}
-</div>
-
-<!-- BUSCADOR -->
-<div class="card mb2" style="padding:1rem 1.5rem">
-  <form method="get" class="filter-bar">
-    {% if filtro %}<input type="hidden" name="estado" value="{{ filtro }}">{% endif %}
-    <div>
-      <label>Buscar</label>
-      <input type="text" name="q" placeholder="Buque, N° PE, PARCEL, OC, producto…" value="{{ busqueda }}">
-    </div>
-    <div>
-      <label>Despachante</label>
-      <select name="despachante" style="width:170px">
-        <option value="">Todos</option>
-        {% for d in despachantes %}
-        <option value="{{ d.id }}" {% if desp_f==d.id|string %}selected{% endif %}>{{ d.nombre }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div>
-      <label>Desde</label>
-      <input type="date" name="fecha_desde" value="{{ fecha_d }}">
-    </div>
-    <div>
-      <label>Hasta</label>
-      <input type="date" name="fecha_hasta" value="{{ fecha_h }}">
-    </div>
-    <div style="align-self:flex-end;display:flex;gap:.5rem">
-      <button type="submit" class="btn btn-primary btn-sm">Buscar</button>
-      {% if busqueda or filtro or desp_f or fecha_d or fecha_h %}
-      <a href="{{ url_for('index') }}" class="btn btn-outline btn-sm">Limpiar</a>
-      {% endif %}
-    </div>
-  </form>
+<div class="gmail-bar" id="gmail-bar">
+  <span id="gmail-status-text">⏳ Verificando conexión Gmail...</span>
+  <div id="gmail-actions"></div>
 </div>
 
-<!-- TABLA -->
-<div class="card" style="padding:0">
-{% if permisos %}
-<div class="table-wrap">
-<table>
-  <thead>
-    <tr>
-      <th>#</th>
-      <th>Buque</th>
-      <th>Nro de Proyecto</th>
-      <th>N° PE</th>
-      <th>N° OC</th>
-      <th>Producto</th>
-      <th>Ton. Sol.</th>
-      <th>Ton. Carg.</th>
-      <th>Despachante</th>
-      <th>Estado</th>
-      <th>Última act.</th>
-      <th>Arch.</th>
-      <th>Factura</th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for p in permisos %}
-  {% set idx = estado_index(p.estado) %}
-  {% set horas = horas_en_estado(p.fecha_ultimo_cambio or p.creado_en) %}
-  {% set es_alerta = horas > ALERTA_HORAS and p.estado not in ('CUMPLIDO_ENVIADO','ELIMINADO') %}
-  {% set es_eliminado = p.eliminado %}
-  <tr {% if es_eliminado %}class="td-eliminado"{% elif es_alerta %}class="td-alerta"{% endif %}>
-    <td class="td-mono text-muted">{{ p.id }}</td>
-    <td class="fw6">{{ p.buque_nombre }}</td>
-    <td class="td-mono text-muted">{{ p.viaje or '—' }}</td>
-    <td class="td-mono">{{ p.numero_pe or '—' }}</td>
-    <td class="td-mono text-muted">{{ p.numero_oc or '—' }}</td>
-    <td>{{ p.producto or '—' }}</td>
-    <td class="td-mono">{{ format_ton(p.toneladas_solicitadas) }}</td>
-    <td class="td-mono">
-      {% if p.toneladas_cargadas %}
-        {{ format_ton(p.toneladas_cargadas) }}
-        {% if p.toneladas_solicitadas %}
-          {% set diff = p.toneladas_cargadas - p.toneladas_solicitadas %}
-          <span class="{% if diff >= 0 %}diff-pos{% else %}diff-neg{% endif %} mono" style="font-size:.7rem">
-            ({% if diff > 0 %}+{% endif %}{{ '%.3f'|format(diff) }})
-          </span>
-        {% endif %}
-      {% else %}—{% endif %}
-    </td>
-    <td>{{ p.despachante_nombre or '—' }}</td>
-    <td>
-      {% if es_eliminado %}
-        <span class="badge badge-elim">✕ Eliminado</span>
-      {% else %}
-        <span class="badge e{{ idx }}">{{ estado_label(p.estado) }}</span>
-        {% if es_alerta %}<span class="badge-alerta badge" style="margin-left:.3rem">⚠ {{ horas|int }}h</span>{% endif %}
-      {% endif %}
-    </td>
-    <td class="td-mono text-muted">{{ format_fecha_corta(p.fecha_ultimo_cambio or p.creado_en) }}</td>
-    <td>
-      <span style="font-size:.85rem">
-        {% if p.archivo_solicitud %}📄{% else %}⬜{% endif %}
-        {% if p.archivo_oficializado %}📄{% else %}⬜{% endif %}
-        {% if p.archivo_cumplido %}📄{% else %}⬜{% endif %}
-      </span>
-    </td>
-    <td>
-      {% if p.facturado %}
-        <span class="badge e3" style="font-size:.68rem">✓ {{ p.numero_factura }}</span>
-      {% elif not es_eliminado and estado_index(p.estado) >= 4 %}
-        <span class="badge" style="background:#fff3e6;color:#c05a00;font-size:.68rem">Pendiente</span>
-      {% else %}
-        <span class="text-muted" style="font-size:.8rem">—</span>
-      {% endif %}
-    </td>
-    <td><a href="{{ url_for('detalle_pe', pe_id=p.id) }}" class="btn btn-outline btn-sm">Ver</a></td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<div class="container">
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('dash',this)">🏠 Resumen</button>
+    <button class="tab-btn" onclick="switchTab('pes',this)">📋 Permisos de Exportación</button>
+    <button class="tab-btn" onclick="switchTab('sol',this)">📥 Solicitudes Bunge</button>
+    <button class="tab-btn" onclick="switchTab('plan',this)">📦 Plan de Cargas</button>
+    <button class="tab-btn" onclick="switchTab('buscar',this)">🔍 Buscador</button>
+  </div>
+
+  <!-- TAB Dashboard -->
+  <div id="tab-dash" class="tab-content active">
+    <div class="card">
+      <h2>📊 Estado operativo</h2>
+      <div id="dash-content"><span class="empty-msg">Cargando...</span></div>
+    </div>
+  </div>
+
+  <!-- TAB PEs -->
+  <div id="tab-pes" class="tab-content">
+    <div class="card">
+      <h2>📄 Cargar PE</h2>
+      <div class="toolbar">
+        <button class="btn btn-gmail" id="btn-gmail-pe" onclick="fetchFromGmail('pe')" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+          Revisar Gmail (despachante)
+        </button>
+        <div class="divider"></div>
+        <span style="font-size:0.82rem;color:#666">o subí el PDF manualmente:</span>
+      </div>
+      <div class="drop-zone" id="pe-drop">
+        <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#1F4E79" stroke-width="1.5" style="margin-bottom:8px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        <p><strong>Hacé click o arrastrá el PDF</strong> del PE oficializado</p>
+        <p style="margin-top:4px;font-size:0.76rem;color:#999">Solo archivos .pdf</p>
+      </div>
+      <input type="file" id="pe-file" accept=".pdf" style="display:none">
+      <div class="gmail-result" id="gmail-result-pe"></div>
+    </div>
+    <div class="loader" id="pe-loader"><div class="spinner"></div><p style="color:#555">Procesando PE con IA...</p></div>
+    <div class="card-inner preview-section" id="pe-preview">
+      <h2>✏️ Verificar datos del PE</h2>
+      <div id="pe-alert"></div>
+      <div class="preview-grid" id="pe-grid"></div>
+      <div class="actions">
+        <button class="btn btn-success" id="pe-confirm-btn" onclick="confirmPE()">✔ Confirmar y guardar</button>
+        <button class="btn btn-outline" onclick="resetPE()">Cancelar</button>
+        <span id="pe-status" style="font-size:0.83rem;color:#555"></span>
+      </div>
+    </div>
+    <div class="card-inner">
+      <h2>📊 PEs registrados</h2>
+      <div class="toolbar">
+        <a href="/download" class="btn btn-success" download>⬇ Descargar Excel</a>
+        <button class="btn btn-outline" onclick="loadPEList()">↻ Actualizar</button>
+      </div>
+      <div id="pe-list"><span class="empty-msg">Cargando...</span></div>
+    </div>
+  </div>
+
+  <!-- TAB Solicitudes -->
+  <div id="tab-sol" class="tab-content">
+    <div class="card">
+      <h2>📥 Cargar solicitud de Bunge</h2>
+      <div class="toolbar">
+        <button class="btn btn-gmail" id="btn-gmail-sol" onclick="fetchFromGmail('solicitud')" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+          Revisar Gmail (Bunge)
+        </button>
+        <div class="divider"></div>
+        <span style="font-size:0.82rem;color:#666">o subí el PDF manualmente:</span>
+      </div>
+      <div class="drop-zone" id="sol-drop">
+        <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#1F4E79" stroke-width="1.5" style="margin-bottom:8px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        <p><strong>Hacé click o arrastrá el PDF</strong> de la solicitud de Bunge</p>
+        <p style="margin-top:4px;font-size:0.76rem;color:#999">Solo archivos .pdf</p>
+      </div>
+      <input type="file" id="sol-file" accept=".pdf" style="display:none">
+      <div class="gmail-result" id="gmail-result-sol"></div>
+    </div>
+    <div class="loader" id="sol-loader"><div class="spinner"></div><p style="color:#555">Procesando solicitud con IA...</p></div>
+    <div class="card-inner preview-section" id="sol-preview">
+      <h2>✏️ Verificar datos de la solicitud</h2>
+      <div id="sol-alert"></div>
+      <div class="preview-grid" id="sol-grid"></div>
+      <div class="actions">
+        <button class="btn btn-success" id="sol-confirm-btn" onclick="confirmSol()">✔ Confirmar y guardar</button>
+        <button class="btn btn-outline" onclick="resetSol()">Cancelar</button>
+        <span id="sol-status" style="font-size:0.83rem;color:#555"></span>
+      </div>
+    </div>
+    <div class="card-inner">
+      <h2>📋 Solicitudes registradas</h2>
+      <div class="toolbar">
+        <a href="/download" class="btn btn-success" download>⬇ Descargar Excel</a>
+        <button class="btn btn-outline" onclick="loadSolList()">↻ Actualizar</button>
+      </div>
+      <div id="sol-list"><span class="empty-msg">Cargando...</span></div>
+    </div>
+  </div>
+
+  <!-- TAB Plan de Cargas -->
+  <div id="tab-plan" class="tab-content">
+    <div class="card">
+      <h2>📦 Cargar Plan de Cargas de Bunge</h2>
+      <div class="drop-zone" id="plan-drop">
+        <svg width="40" height="40" fill="none" viewBox="0 0 24 24" stroke="#1F4E79" stroke-width="1.5" style="margin-bottom:8px"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+        <p><strong>Hacé click o arrastrá el Excel</strong> del Plan de Cargas</p>
+        <p style="margin-top:4px;font-size:0.76rem;color:#999">Archivos .xlsx — todas las hojas se procesan automáticamente</p>
+      </div>
+      <input type="file" id="plan-file" accept=".xlsx,.xls" style="display:none">
+      <div id="plan-result"></div>
+    </div>
+    <div class="loader" id="plan-loader"><div class="spinner"></div><p style="color:#555">Procesando Excel...</p></div>
+    <div class="card-inner" id="plan-preview" style="display:none">
+      <h2>✏️ Confirmar carga</h2>
+      <div id="plan-alert"></div>
+      <div id="plan-summary" style="margin-bottom:14px;font-size:0.88rem;color:#444"></div>
+      <div class="actions">
+        <button class="btn btn-success" id="plan-confirm-btn" onclick="confirmPlan()">✔ Confirmar y guardar todo</button>
+        <button class="btn btn-outline" onclick="resetPlan()">Cancelar</button>
+        <span id="plan-status" style="font-size:0.83rem;color:#555"></span>
+      </div>
+    </div>
+    <div class="card-inner">
+      <h2>📋 Bookings registrados</h2>
+      <div class="toolbar">
+        <a href="/download" class="btn btn-success" download>⬇ Descargar Excel</a>
+        <button class="btn btn-outline" onclick="loadPlanList()">↻ Actualizar</button>
+      </div>
+      <div id="plan-list"><span class="empty-msg">Cargando...</span></div>
+    </div>
+  </div>
+
+  <!-- TAB Buscador -->
+  <div id="tab-buscar" class="tab-content">
+    <div class="card">
+      <h2>🔍 Buscador global</h2>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px">
+        <input type="text" id="search-input" placeholder="Ingresá buque, booking, Nº PE, DJVE, destino..."
+          style="flex:1;border:2px solid #BDD7EE;border-radius:6px;padding:10px 14px;font-size:0.95rem;outline:none"
+          oninput="searchDebounce()"
+          onfocus="this.style.borderColor='#1F4E79'"
+          onblur="this.style.borderColor='#BDD7EE'">
+        <button class="btn btn-primary" onclick="doSearch()">Buscar</button>
+      </div>
+      <div id="search-results"></div>
+    </div>
+  </div>
+
 </div>
-{% else %}
-<div class="empty">
-  <div class="empty-icon">📋</div>
-  <div class="empty-title">No hay permisos{% if filtro or busqueda %} con ese filtro{% endif %}</div>
-  <div class="empty-sub">{% if not filtro and not busqueda %}Creá el primero con "+ Nuevo PE"{% else %}Probá cambiando los filtros{% endif %}</div>
-</div>
-{% endif %}
-</div>
-{% endblock %}
+
+<footer>Trimar S.A. · Gestor de PEs · procesamiento vía Claude AI</footer>
+
+<script>
+// ---- Tabs ----
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='sol') loadSolList();
+  if(name==='plan') loadPlanList();
+  if(name==='dash') loadDashboard();
+  if(name==='buscar') document.getElementById('search-input').focus();
+}
+
+// ---- Gmail ----
+function checkGmailStatus() {
+  fetch('/gmail/status').then(r=>r.json()).then(s=>{
+    const bar=document.getElementById('gmail-status-text');
+    const actions=document.getElementById('gmail-actions');
+    if(s.connected){
+      bar.innerHTML='✅ <strong>Gmail conectado</strong> — trimar@trimar.com.ar';
+      actions.innerHTML=`<button class="btn btn-outline btn-sm" onclick="disconnectGmail()">Desconectar</button>`;
+      document.getElementById('btn-gmail-pe').disabled=false;
+      document.getElementById('btn-gmail-sol').disabled=false;
+    } else {
+      bar.innerHTML='⚠️ Gmail no conectado';
+      actions.innerHTML=`<a href="/gmail/auth" class="btn btn-gmail btn-sm">Conectar Gmail</a>`;
+    }
+  });
+}
+function disconnectGmail(){if(!confirm('¿Desconectar Gmail?'))return;fetch('/gmail/disconnect').then(()=>checkGmailStatus());}
+
+function fetchFromGmail(tipo) {
+  const resultEl=document.getElementById(`gmail-result-${tipo==='pe'?'pe':'sol'}`);
+  const loaderEl=document.getElementById(`${tipo==='pe'?'pe':'sol'}-loader`);
+  resultEl.innerHTML='<span style="color:#555">🔍 Buscando mails nuevos...</span>';
+  loaderEl.style.display='block';
+  fetch(`/gmail/fetch/${tipo}`,{method:'POST'}).then(r=>r.json()).then(res=>{
+    loaderEl.style.display='none';
+    if(res.error){resultEl.innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`;return;}
+    if(res.found===0){resultEl.innerHTML=`<div class="alert alert-info">📭 No hay mails nuevos con PDF adjunto.</div>`;return;}
+    let html='';
+    if(res.processed.length) html+=`<div class="alert alert-success">✅ <strong>${res.processed.length}</strong> PDF${res.processed.length>1?'s':''} procesado${res.processed.length>1?'s':''}:<br>${res.processed.map(p=>`&nbsp;• ${p.filename} — <em>${p.subject}</em>`).join('<br>')}</div>`;
+    if(res.skipped.length) html+=`<div class="alert alert-warning">⚠️ <strong>${res.skipped.length}</strong> omitido${res.skipped.length>1?'s':''}:<br>${res.skipped.map(p=>`&nbsp;• ${p.filename}: ${p.reason}`).join('<br>')}</div>`;
+    resultEl.innerHTML=html;
+    if(tipo==='pe') loadPEList(); else loadSolList();
+    loadDashboard();
+  }).catch(e=>{loaderEl.style.display='none';resultEl.innerHTML=`<div class="alert alert-danger">❌ ${e.message}</div>`;});
+}
+
+// ---- Drop & file ----
+function setupDrop(zoneId, fileId, handler) {
+  const zone=document.getElementById(zoneId);
+  zone.addEventListener('click',()=>document.getElementById(fileId).click());
+  zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag-over')});
+  zone.addEventListener('dragleave',()=>zone.classList.remove('drag-over'));
+  zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)handler(f)});
+  document.getElementById(fileId).addEventListener('change',e=>{if(e.target.files[0])handler(e.target.files[0])});
+}
+
+// ==================== PEs ====================
+let peData=null;
+const PE_LABELS={nro_pe:"Nº PE",fecha_oficializacion:"Fecha Oficialización",buque:"Buque",bandera:"Bandera",pais_destino:"País Destino",mercaderia:"Mercadería",posicion_arancelaria:"Posición Arancelaria",cond_venta:"Cond. Venta",peso_bruto_kg:"Peso Bruto (kg)",toneladas:"Toneladas",fob_total_usd:"FOB Total (USD)",flete_usd:"Flete (USD)",precio_unit_usd_tn:"Precio Unit. (USD/Tn)",precio_oficial_usd_tn:"Precio Oficial (USD/Tn)",djve:"DJVE",fecha_cierre_vta:"Fecha Cierre Vta.",vto_embarque:"Vto. Embarque",ant_gan_usd:"Ant. Gan. (USD)",cotizacion:"Cotización"};
+
+setupDrop('pe-drop','pe-file',uploadPE);
+function uploadPE(file){
+  document.getElementById('pe-preview').style.display='none';
+  document.getElementById('pe-loader').style.display='block';
+  const fd=new FormData();fd.append('pdf',file);
+  fetch('/upload',{method:'POST',body:fd}).then(r=>r.json()).then(data=>{
+    document.getElementById('pe-loader').style.display='none';
+    if(data.error){alert('Error: '+data.error);return;}
+    peData=data;showPreview('pe',data,PE_LABELS);
+    let alertHtml='';
+    if(data.already_exists) alertHtml+=`<div class="alert alert-warning">⚠️ El PE <strong>${data.nro_pe}</strong> ya existe.</div>`;
+    if(data.solicitud_match) alertHtml+=`<div class="alert alert-success">🔗 Solicitud Bunge encontrada — Buque: <strong>${data.solicitud_match.buque}</strong> · Booking: <strong>${data.solicitud_match.booking||'sin booking'}</strong> · Fecha: ${data.solicitud_match.fecha_solicitud}</div>`;
+    else alertHtml+=`<div class="alert alert-info">ℹ️ No se encontró solicitud Bunge asociada.</div>`;
+    document.getElementById('pe-alert').innerHTML=alertHtml;
+  }).catch(e=>{document.getElementById('pe-loader').style.display='none';alert('Error: '+e.message)});
+}
+function confirmPE(){
+  const btn=document.getElementById('pe-confirm-btn');
+  btn.disabled=true;document.getElementById('pe-status').textContent='Guardando...';
+  syncFields('pe',PE_LABELS,peData);delete peData.already_exists;delete peData.solicitud_match;
+  fetch('/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(peData)})
+    .then(r=>r.json()).then(res=>{
+      btn.disabled=false;
+      if(res.error){document.getElementById('pe-alert').innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`;document.getElementById('pe-status').textContent='';return;}
+      document.getElementById('pe-alert').innerHTML=`<div class="alert alert-success">✅ PE <strong>${res.nro_pe}</strong> guardado.</div>`;
+      document.getElementById('pe-status').textContent='';loadPEList();loadDashboard();setTimeout(resetPE,3000);
+    }).catch(e=>{btn.disabled=false;document.getElementById('pe-status').textContent='Error: '+e.message});
+}
+function resetPE(){document.getElementById('pe-preview').style.display='none';document.getElementById('pe-file').value='';peData=null;}
+function deletePE(nro){if(!confirm('¿Eliminar PE '+nro+'?'))return;fetch(`/pe/delete/${encodeURIComponent(nro)}`,{method:'DELETE'}).then(()=>{loadPEList();loadDashboard();});}
+function loadPEList(){
+  fetch('/list').then(r=>r.json()).then(list=>{
+    const el=document.getElementById('pe-list');
+    if(!list.length){el.innerHTML='<span class="empty-msg">No hay PEs registrados aún</span>';return;}
+    el.innerHTML=`<div class="table-wrap"><table class="dt"><thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th><th>Booking</th><th></th></tr></thead><tbody>
+      ${list.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.fecha_oficializacion}</td><td>${p.buque}</td><td>${p.pais_destino}</td>
+      <td>${p.booking?`<strong style="color:#217346">${p.booking}</strong>`:'<span style="color:#aaa">—</span>'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deletePE('${p.nro_pe}')">✕</button></td></tr>`).join('')}
+    </tbody></table></div>`;
+  });
+}
+
+// ==================== Solicitudes ====================
+let solData=null;
+const SOL_LABELS={buque:"Buque",bandera:"Bandera",destino:"Destino",producto:"Producto",cantidad_tn:"Cantidad (Tn)",djve:"DJVE",contrato:"Contrato",cond_venta:"Cond. Venta",precio_fob_usd_tn:"Precio FOB (USD/Tn)",importe_total_usd:"Importe Total (USD)",fecha_solicitud:"Fecha Solicitud",fecha_vta:"Fecha Vta.",booking:"Booking"};
+
+setupDrop('sol-drop','sol-file',uploadSol);
+function uploadSol(file){
+  document.getElementById('sol-preview').style.display='none';
+  document.getElementById('sol-loader').style.display='block';
+  const fd=new FormData();fd.append('pdf',file);
+  fetch('/solicitud/upload',{method:'POST',body:fd}).then(r=>r.json()).then(data=>{
+    document.getElementById('sol-loader').style.display='none';
+    if(data.error){alert('Error: '+data.error);return;}
+    solData=data;showPreview('sol',data,SOL_LABELS);
+    document.getElementById('sol-alert').innerHTML=data.tiene_pe
+      ?`<div class="alert alert-success">✅ Ya tiene PE generado.</div>`
+      :`<div class="alert alert-warning">⏳ Sin PE generado todavía.</div>`;
+  }).catch(e=>{document.getElementById('sol-loader').style.display='none';alert('Error: '+e.message)});
+}
+function confirmSol(){
+  const btn=document.getElementById('sol-confirm-btn');
+  btn.disabled=true;document.getElementById('sol-status').textContent='Guardando...';
+  syncFields('sol',SOL_LABELS,solData);delete solData.tiene_pe;
+  fetch('/solicitud/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(solData)})
+    .then(r=>r.json()).then(res=>{
+      btn.disabled=false;
+      if(res.error){document.getElementById('sol-alert').innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`;document.getElementById('sol-status').textContent='';return;}
+      document.getElementById('sol-alert').innerHTML=`<div class="alert alert-success">✅ Solicitud guardada.</div>`;
+      document.getElementById('sol-status').textContent='';loadSolList();loadDashboard();setTimeout(resetSol,3000);
+    }).catch(e=>{btn.disabled=false;document.getElementById('sol-status').textContent='Error: '+e.message});
+}
+function resetSol(){document.getElementById('sol-preview').style.display='none';document.getElementById('sol-file').value='';solData=null;}
+function deleteSol(id){if(!confirm('¿Eliminar?'))return;fetch(`/solicitud/delete/${id}`,{method:'DELETE'}).then(()=>{loadSolList();loadDashboard();});}
+function loadSolList(){
+  fetch('/solicitud/list').then(r=>r.json()).then(list=>{
+    const el=document.getElementById('sol-list');
+    if(!list.length){el.innerHTML='<span class="empty-msg">No hay solicitudes registradas aún</span>';return;}
+    el.innerHTML=`<div class="table-wrap"><table class="dt"><thead><tr><th>Buque</th><th>Destino</th><th>Producto</th><th>Tn</th><th>DJVE</th><th>Booking</th><th>Fecha Sol.</th><th>Estado</th><th></th></tr></thead><tbody>
+      ${list.map(s=>`<tr><td>${s.buque||'-'}</td><td>${s.destino||'-'}</td><td>${s.producto||'-'}</td><td>${s.cantidad_tn||'-'}</td><td>${s.djve||'-'}</td><td>${s.booking||'-'}</td><td>${s.fecha_solicitud||'-'}</td>
+      <td><span class="badge ${s.tiene_pe?'badge-ok':'badge-pending'}">${s.tiene_pe?'✅ PE Generado':'⏳ Pendiente'}</span></td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteSol(${s.id})">✕</button></td></tr>`).join('')}
+    </tbody></table></div>`;
+  });
+}
+
+// ==================== Plan de Cargas ====================
+let planData=null;
+
+setupDrop('plan-drop','plan-file',uploadPlan);
+function uploadPlan(file){
+  document.getElementById('plan-preview').style.display='none';
+  document.getElementById('plan-loader').style.display='block';
+  document.getElementById('plan-result').innerHTML='';
+  const fd=new FormData();fd.append('excel',file);
+  fetch('/plan/upload',{method:'POST',body:fd}).then(r=>r.json()).then(data=>{
+    document.getElementById('plan-loader').style.display='none';
+    if(data.error){alert('Error: '+data.error);return;}
+    planData=data;
+    const rows=data.rows.slice(0,5);
+    let html=`<table class="dt" style="margin-bottom:10px"><thead><tr><th>Semana</th><th>Buque</th><th>Booking</th><th>Contrato</th><th>Producto</th><th>Cont.</th><th>Fecha Carga</th><th>POD</th><th>ETD</th></tr></thead><tbody>`;
+    html+=rows.map(r=>`<tr><td>${r.semana||'-'}</td><td>${r.buque||'-'}</td><td><strong>${r.booking||'-'}</strong></td><td>${r.contrato||'-'}</td><td>${r.producto||'-'}</td><td>${r.cantidad_contenedores||'-'}</td><td>${r.fecha_carga||'-'}</td><td>${r.pod||'-'}</td><td>${r.etd||'-'}</td></tr>`).join('');
+    if(data.count>5) html+=`<tr><td colspan="9" style="text-align:center;color:#888;font-style:italic">... y ${data.count-5} filas más</td></tr>`;
+    html+='</tbody></table>';
+    document.getElementById('plan-summary').innerHTML=`Se encontraron <strong>${data.count}</strong> filas. Vista previa (primeras 5):<br><br>`+html;
+    document.getElementById('plan-preview').style.display='block';
+    document.getElementById('plan-status').textContent='';
+    document.getElementById('plan-preview').scrollIntoView({behavior:'smooth'});
+  }).catch(e=>{document.getElementById('plan-loader').style.display='none';alert('Error: '+e.message)});
+}
+function confirmPlan(){
+  const btn=document.getElementById('plan-confirm-btn');
+  btn.disabled=true;document.getElementById('plan-status').textContent='Guardando...';
+  fetch('/plan/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows:planData.rows})})
+    .then(r=>r.json()).then(res=>{
+      btn.disabled=false;
+      if(res.error){document.getElementById('plan-alert').innerHTML=`<div class="alert alert-danger">❌ ${res.error}</div>`;document.getElementById('plan-status').textContent='';return;}
+      document.getElementById('plan-alert').innerHTML=`<div class="alert alert-success">✅ ${res.inserted} filas guardadas${res.skipped?`, ${res.skipped} ya existían`:''}.`;
+      document.getElementById('plan-status').textContent='';loadPlanList();loadDashboard();setTimeout(resetPlan,4000);
+    }).catch(e=>{btn.disabled=false;document.getElementById('plan-status').textContent='Error: '+e.message});
+}
+function resetPlan(){document.getElementById('plan-preview').style.display='none';document.getElementById('plan-file').value='';planData=null;document.getElementById('plan-result').innerHTML='';}
+function deletePlan(id){if(!confirm('¿Eliminar?'))return;fetch(`/plan/delete/${id}`,{method:'DELETE'}).then(()=>{loadPlanList();loadDashboard();});}
+function loadPlanList(){
+  fetch('/plan/list').then(r=>r.json()).then(list=>{
+    const el=document.getElementById('plan-list');
+    if(!list.length){el.innerHTML='<span class="empty-msg">No hay bookings registrados aún</span>';return;}
+    el.innerHTML=`<div class="table-wrap"><table class="dt"><thead><tr><th>Semana</th><th>Buque</th><th>Booking</th><th>Contrato</th><th>Producto</th><th>Cont.</th><th>POD</th><th>Fecha Carga</th><th>ETD</th><th>Solicitud</th><th>PE</th><th></th></tr></thead><tbody>
+      ${list.map(r=>`<tr>
+        <td>${r.semana||'-'}</td><td>${r.buque||'-'}</td><td><strong>${r.booking||'-'}</strong></td>
+        <td>${r.contrato||'-'}</td><td>${r.producto||'-'}</td><td>${r.cantidad_contenedores||'-'}</td>
+        <td>${r.pod||'-'}</td><td>${r.fecha_carga||'-'}</td><td>${r.etd||'-'}</td>
+        <td style="text-align:center">${r.tiene_solicitud?'✅':'—'}</td>
+        <td style="text-align:center">${r.tiene_pe?'✅':'—'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deletePlan(${r.id})">✕</button></td>
+      </tr>`).join('')}
+    </tbody></table></div>`;
+  });
+}
+
+// ==================== Buscador ====================
+let searchTimeout=null;
+function searchDebounce(){clearTimeout(searchTimeout);searchTimeout=setTimeout(doSearch,400);}
+function doSearch(){
+  const q=document.getElementById('search-input').value.trim();
+  const el=document.getElementById('search-results');
+  if(!q||q.length<2){el.innerHTML='';return;}
+  el.innerHTML='<span class="empty-msg">Buscando...</span>';
+  fetch(`/search?q=${encodeURIComponent(q)}`).then(r=>r.json()).then(data=>{
+    const total=data.pes.length+data.solicitudes.length+data.plan.length;
+    if(total===0){el.innerHTML=`<span class="empty-msg">No se encontraron resultados para "${q}"</span>`;return;}
+    let html='';
+    if(data.pes.length){
+      html+=`<div style="margin-bottom:18px"><h3 style="font-size:0.9rem;color:#1F4E79;margin-bottom:8px">📋 Permisos de Exportación (${data.pes.length})</h3>
+      <table class="dt"><thead><tr><th>Nº PE</th><th>Fecha</th><th>Buque</th><th>País Destino</th><th>Toneladas</th><th>FOB (USD)</th><th>DJVE</th><th>Vto. Embarque</th></tr></thead><tbody>
+      ${data.pes.map(p=>`<tr><td><strong>${p.nro_pe||'-'}</strong></td><td>${p.fecha_oficializacion||'-'}</td><td>${p.buque||'-'}</td><td>${p.pais_destino||'-'}</td><td>${p.toneladas||'-'}</td><td>${p.fob_total_usd||'-'}</td><td>${p.djve||'-'}</td><td>${p.vto_embarque||'-'}</td></tr>`).join('')}
+      </tbody></table></div>`;
+    }
+    if(data.solicitudes.length){
+      html+=`<div style="margin-bottom:18px"><h3 style="font-size:0.9rem;color:#217346;margin-bottom:8px">📥 Solicitudes Bunge (${data.solicitudes.length})</h3>
+      <table class="dt"><thead><tr><th>Buque</th><th>Producto</th><th>Cantidad (Tn)</th><th>DJVE</th><th>Booking</th><th>Fecha Sol.</th><th>Importe (USD)</th></tr></thead><tbody>
+      ${data.solicitudes.map(s=>`<tr><td>${s.buque||'-'}</td><td>${s.producto||'-'}</td><td>${s.cantidad_tn||'-'}</td><td>${s.djve||'-'}</td><td>${s.booking||'-'}</td><td>${s.fecha_solicitud||'-'}</td><td>${s.importe_total_usd||'-'}</td></tr>`).join('')}
+      </tbody></table></div>`;
+    }
+    if(data.plan.length){
+      html+=`<div style="margin-bottom:18px"><h3 style="font-size:0.9rem;color:#7B3F00;margin-bottom:8px">📦 Plan de Cargas (${data.plan.length})</h3>
+      <table class="dt"><thead><tr><th>Semana</th><th>Buque</th><th>Booking</th><th>Contrato</th><th>Producto</th><th>Cont.</th><th>Fecha Carga</th><th>POD</th><th>ETD</th></tr></thead><tbody>
+      ${data.plan.map(r=>`<tr><td>${r.semana||'-'}</td><td>${r.buque||'-'}</td><td><strong>${r.booking||'-'}</strong></td><td>${r.contrato||'-'}</td><td>${r.producto||'-'}</td><td>${r.cantidad_contenedores||'-'}</td><td>${r.fecha_carga||'-'}</td><td>${r.pod||'-'}</td><td>${r.etd||'-'}</td></tr>`).join('')}
+      </tbody></table></div>`;
+    }
+    el.innerHTML=html;
+  }).catch(e=>{el.innerHTML=`<span class="empty-msg">Error: ${e.message}</span>`;});
+}
+
+// ==================== Dashboard ====================
+function loadDashboard(){
+  fetch('/dashboard').then(r=>r.json()).then(d=>{
+    const el=document.getElementById('dash-content');
+    if(!el)return;
+    let html=`<div class="stats-grid">
+      ${[
+        {label:'PEs Registrados',val:d.total_pes,color:'#1F4E79',icon:'📋'},
+        {label:'Solicitudes Bunge',val:d.total_sol,color:'#217346',icon:'📥'},
+        {label:'Pendientes de PE',val:d.sol_sin_pe,color:d.sol_sin_pe>0?'#c0392b':'#217346',icon:'⏳'},
+        {label:'Plan de Cargas',val:d.total_plan,color:'#7B3F00',icon:'📦'}
+      ].map(s=>`<div class="stat-card" style="border-left:4px solid ${s.color}">
+        <div style="font-size:0.78rem;color:#666;margin-bottom:4px">${s.icon} ${s.label}</div>
+        <div style="font-size:1.8rem;font-weight:700;color:${s.color}">${s.val}</div>
+      </div>`).join('')}
+    </div>`;
+    if(d.pes_vencer&&d.pes_vencer.length){
+      html+=`<div class="stat-card" style="margin-bottom:14px">
+        <h3 style="font-size:0.9rem;color:#c0392b;margin-bottom:10px">⚠️ PEs con vencimiento próximo o vencidos</h3>
+        <table class="dt"><thead><tr><th>Nº PE</th><th>Buque</th><th>Destino</th><th>Vto. Embarque</th><th>Estado</th></tr></thead><tbody>
+        ${d.pes_vencer.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.buque}</td><td>${p.pais_destino}</td><td>${p.vto_embarque}</td>
+        <td><span class="badge" style="${p.dias<0?'background:#f8d7da;color:#842029':'background:#fff3cd;color:#856404'}">${p.dias<0?'⛔ Vencido hace '+Math.abs(p.dias)+' días':'⚠️ Vence en '+p.dias+' días'}</span></td></tr>`).join('')}
+        </tbody></table></div>`;
+    }
+    html+=`<div class="dash-bottom">
+      <div class="stat-card"><h3 style="font-size:0.9rem;color:#1F4E79;margin-bottom:10px">📋 Últimos PEs cargados</h3>
+        <table class="dt"><thead><tr><th>Nº PE</th><th>Buque</th><th>Fecha</th></tr></thead><tbody>
+        ${d.ultimos_pes.map(p=>`<tr><td><strong>${p.nro_pe}</strong></td><td>${p.buque}</td><td>${p.fecha_oficializacion}</td></tr>`).join('')}
+        </tbody></table></div>
+      <div class="stat-card"><h3 style="font-size:0.9rem;color:#217346;margin-bottom:10px">📥 Últimas solicitudes</h3>
+        <table class="dt"><thead><tr><th>Buque</th><th>Tn</th><th>Fecha</th></tr></thead><tbody>
+        ${d.ultimas_sol.map(s=>`<tr><td>${s.buque}</td><td>${s.cantidad_tn}</td><td>${s.fecha_solicitud}</td></tr>`).join('')}
+        </tbody></table></div>
+    </div>`;
+    el.innerHTML=html;
+  }).catch(e=>{const el=document.getElementById('dash-content');if(el)el.innerHTML='<span class="empty-msg">Error cargando dashboard</span>';});
+}
+
+// ---- Generic preview ----
+function showPreview(prefix,data,labels){
+  const grid=document.getElementById(prefix+'-grid');grid.innerHTML='';
+  Object.keys(labels).forEach(key=>{
+    const div=document.createElement('div');div.className='field-group';
+    const lbl=document.createElement('label');lbl.textContent=labels[key];
+    const inp=document.createElement('input');inp.type='text';inp.id=prefix+'_field_'+key;
+    inp.value=data[key]!==null&&data[key]!==undefined?data[key]:'';
+    inp.addEventListener('input',()=>inp.classList.add('changed'));
+    div.appendChild(lbl);div.appendChild(inp);grid.appendChild(div);
+  });
+  document.getElementById(prefix+'-preview').style.display='block';
+  document.getElementById(prefix+'-status').textContent='';
+  document.getElementById(prefix+'-preview').scrollIntoView({behavior:'smooth'});
+}
+function syncFields(prefix,labels,obj){Object.keys(labels).forEach(key=>{const el=document.getElementById(prefix+'_field_'+key);if(el)obj[key]=el.value;});}
+
+// ---- Init ----
+checkGmailStatus();
+loadPEList();
+loadDashboard();
+
+if(new URLSearchParams(window.location.search).get('gmail')==='ok'){
+  history.replaceState({},'','/');
+  checkGmailStatus();
+}
+</script>
+</body>
+</html>
