@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Trimar · Nuevo PE{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="fxc gap1 mb1">
+      <a href="{{ url_for('index') }}" class="text-muted text-sm" style="text-decoration:none">← Permisos</a>
+    </div>
+    <div class="page-title">Nuevo Permiso de Embarque</div>
+    <div class="page-subtitle">Subí el PDF de Bunge para completar automáticamente</div>
+  </div>
+</div>
+<div class="card" style="max-width:680px">
+  <form method="post" action="{{ url_for('nuevo_pe') }}" enctype="multipart/form-data" id="form-nuevo">
+    <div class="form-group">
+      <label>Solicitud de Bunge (PDF)</label>
+      <input type="file" name="archivo_solicitud" id="archivo_solicitud" accept=".pdf" onchange="extraerPDF(this)">
+      <div class="file-hint">Al subir el PDF, los campos se completan automáticamente</div>
+    </div>
+    <div id="extrayendo" style="display:none;padding:.75rem 1rem;background:var(--acc-lt);border-radius:6px;color:var(--acc);font-size:.83rem;margin-bottom:1rem">⏳ Leyendo PDF…</div>
+    <div id="extraido" style="display:none;padding:.75rem 1rem;background:var(--go-lt);border-radius:6px;color:var(--go);font-size:.83rem;margin-bottom:1rem">✓ Datos extraídos — revisá y completá lo que falte</div>
+    <div id="error-extraccion" style="display:none;padding:.75rem 1rem;background:var(--danger-lt);border-radius:6px;color:var(--danger);font-size:.83rem;margin-bottom:1rem">⚠ No se pudieron extraer todos los datos — completá manualmente</div>
+
+    <div class="form-row fr2">
+      <div class="form-group">
+        <label>Buque *</label>
+        <input type="text" name="buque_nombre" id="f-buque" required placeholder="Ej: SEA LEGEND">
+      </div>
+      <div class="form-group">
+        <label>N° Proyecto (PARCEL)</label>
+        <input type="text" name="viaje" id="f-parcel" placeholder="Ej: AAR.0011642-02">
+      </div>
+    </div>
+    <div class="form-row fr2">
+      <div class="form-group">
+        <label>Producto</label>
+        <input type="text" name="producto" id="f-producto" placeholder="Ej: GIRASOL ACEITE CRUDO">
+      </div>
+      <div class="form-group">
+        <label>Toneladas solicitadas</label>
+        <input type="number" name="toneladas_solicitadas" id="f-toneladas" step="0.001" placeholder="Ej: 15820.000">
+      </div>
+    </div>
+    <div class="form-row fr2">
+      <div class="form-group">
+        <label>N° OC (Orden de Compra)</label>
+        <input type="text" name="numero_oc" placeholder="Ej: OC-2024-001234">
+      </div>
+      <div class="form-group">
+        <label>Notas</label>
+        <input type="text" name="notas" placeholder="Observaciones iniciales…">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Registrado por</label>
+      <select name="usuario">
+        {% for u in usuarios %}<option>{{ u.nombre }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="flex gap2" style="margin-top:.5rem">
+      <a href="{{ url_for('index') }}" class="btn btn-outline">Cancelar</a>
+      <button type="submit" class="btn btn-primary">Crear PE</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function extraerPDF(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('extrayendo').style.display = 'block';
+  document.getElementById('extraido').style.display = 'none';
+  document.getElementById('error-extraccion').style.display = 'none';
+  const formData = new FormData();
+  formData.append('archivo', file);
+  try {
+    const resp = await fetch('/api/extraer-pdf', { method: 'POST', body: formData });
+    const datos = await resp.json();
+    document.getElementById('extrayendo').style.display = 'none';
+    let algoCargado = false;
+    if (datos.buque)     { document.getElementById('f-buque').value     = datos.buque;     algoCargado = true; }
+    if (datos.parcel)    { document.getElementById('f-parcel').value    = datos.parcel;    algoCargado = true; }
+    if (datos.producto)  { document.getElementById('f-producto').value  = datos.producto;  algoCargado = true; }
+    if (datos.toneladas) { document.getElementById('f-toneladas').value = datos.toneladas; algoCargado = true; }
+    document.getElementById(algoCargado ? 'extraido' : 'error-extraccion').style.display = 'block';
+  } catch(e) {
+    document.getElementById('extrayendo').style.display = 'none';
+    document.getElementById('error-extraccion').style.display = 'block';
+  }
+}
+</script>
+{% endblock %}

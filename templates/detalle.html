@@ -1,0 +1,430 @@
+{% extends "base.html" %}
+{% block title %}PE #{{ pe.id }} · {{ pe.buque_nombre }}{% endblock %}
+{% block content %}
+{% set idx = estado_index(pe.estado) %}
+{% set accion = ACCIONES.get(pe.estado, (None, None)) %}
+{% set es_eliminado = pe.eliminado %}
+
+<div class="page-header">
+  <div>
+    <div class="fxc gap1 mb1">
+      <a href="{{ url_for('index') }}" class="text-muted text-sm" style="text-decoration:none">← Permisos</a>
+    </div>
+    <div class="page-title">{{ pe.buque_nombre }}</div>
+    <div class="page-subtitle">
+      PE #{{ pe.id }}{% if pe.numero_pe %} · <strong>{{ pe.numero_pe }}</strong>{% endif %}{% if pe.viaje %} · PARCEL {{ pe.viaje }}{% endif %}{% if pe.numero_oc %} · OC {{ pe.numero_oc }}{% endif %}
+    </div>
+  </div>
+  <div class="fxc gap1" style="flex-wrap:wrap">
+    {% if es_eliminado %}
+      <span class="badge badge-elim" style="font-size:.8rem;padding:.35rem .85rem">✕ Eliminado</span>
+    {% else %}
+      <span class="badge e{{ idx }}" style="font-size:.8rem;padding:.35rem .85rem">{{ estado_label(pe.estado) }}</span>
+      {% if accion[0] %}
+      <button class="btn btn-go" onclick="openModal('modal-avanzar')">→ {{ accion[0] }}</button>
+      {% endif %}
+      <button class="btn btn-outline btn-sm" onclick="openModal('modal-eliminar')"
+              style="color:var(--danger);border-color:var(--danger)">✕ Eliminar</button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- PROGRESO -->
+{% if not es_eliminado %}
+<div class="card mb2">
+  <div class="card-title">Progreso</div>
+  <div class="progress-wrap">
+    <div class="progress-track">
+      {% for i,(key,label,_) in enumerate(ESTADOS) %}
+      <div class="prog-col">
+        <div class="prog-dot {% if i<idx %}done{% elif i==idx %}current{% endif %}">
+          {% if i<idx %}✓{% else %}{{ i+1 }}{% endif %}
+        </div>
+        <div class="prog-label {% if i<idx %}done{% elif i==idx %}current{% endif %}">{{ label }}</div>
+      </div>
+      {% if not loop.last %}<div class="prog-line {% if i<idx %}done{% endif %}"></div>{% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="detail-grid">
+  <!-- COLUMNA IZQUIERDA -->
+  <div>
+    <div class="card mb2">
+      <div class="card-title">Datos del permiso</div>
+
+      {% if pe.toneladas_solicitadas and pe.toneladas_cargadas %}
+      <div class="dl-row">
+        <div class="dl-label">Toneladas solicitadas / cargadas</div>
+        <div class="dl-value mono fw6">
+          {{ format_ton(pe.toneladas_solicitadas) }} tn → {{ format_ton(pe.toneladas_cargadas) }} tn
+          {% set diff = pe.toneladas_cargadas - pe.toneladas_solicitadas %}
+          <span class="{% if diff>=0 %}diff-pos{% else %}diff-neg{% endif %}" style="font-size:.82rem">
+            ({% if diff>0 %}+{% endif %}{{ '%.3f'|format(diff) }} tn)
+          </span>
+        </div>
+      </div>
+      {% else %}
+      <div class="dl-row">
+        <div class="dl-label">Toneladas solicitadas</div>
+        <div class="dl-value mono">{{ format_ton(pe.toneladas_solicitadas) }} tn</div>
+      </div>
+      {% if pe.toneladas_cargadas %}
+      <div class="dl-row">
+        <div class="dl-label">Toneladas cargadas</div>
+        <div class="dl-value mono fw6">{{ format_ton(pe.toneladas_cargadas) }} tn</div>
+      </div>
+      {% endif %}
+      {% endif %}
+
+      <div class="dl-row">
+        <div class="dl-label">Producto</div>
+        <div class="dl-value">{{ pe.producto or '—' }}</div>
+      </div>
+      <div class="dl-row">
+        <div class="dl-label">N° OC</div>
+        <div class="dl-value mono">{{ pe.numero_oc or '—' }}</div>
+      </div>
+      <div class="dl-row">
+        <div class="dl-label">Despachante</div>
+        <div class="dl-value">{{ pe.despachante_nombre or '—' }}{% if pe.despachante_email %} <span class="text-muted">({{ pe.despachante_email }})</span>{% endif %}</div>
+      </div>
+      {% if pe.vto_embarque %}
+      <div class="dl-row">
+        <div class="dl-label">Vto. Embarque</div>
+        <div class="dl-value mono">{{ pe.vto_embarque }}</div>
+      </div>
+      {% endif %}
+      {% if pe.fecha_oficializacion %}
+      <div class="dl-row">
+        <div class="dl-label">Fecha oficialización</div>
+        <div class="dl-value mono text-sm">{{ pe.fecha_oficializacion }}</div>
+      </div>
+      {% endif %}
+      {% if pe.fecha_fin_carga %}
+      <div class="dl-row">
+        <div class="dl-label">Fin de carga</div>
+        <div class="dl-value mono">{{ pe.fecha_fin_carga }}</div>
+      </div>
+      {% endif %}
+      <div class="dl-row">
+        <div class="dl-label">Solicitud recibida</div>
+        <div class="dl-value mono text-sm">{{ format_fecha(pe.fecha_solicitud or pe.creado_en) }}</div>
+      </div>
+      {% if pe.fecha_cumplido %}
+      <div class="dl-row">
+        <div class="dl-label">Cumplido</div>
+        <div class="dl-value mono text-sm">{{ format_fecha(pe.fecha_cumplido) }}</div>
+      </div>
+      {% endif %}
+      {% if pe.notas %}
+      <div class="dl-row">
+        <div class="dl-label">Notas</div>
+        <div class="dl-value text-sm" style="color:var(--ink2);font-style:italic">{{ pe.notas }}</div>
+      </div>
+      {% endif %}
+
+      <!-- FACTURACIÓN -->
+      {% if not es_eliminado and estado_index(pe.estado) >= 4 %}
+      <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--wire)">
+        {% if pe.facturado %}
+        <div class="fxc gap2 jb">
+          <div>
+            <div class="dl-label">Facturación</div>
+            <div class="dl-value fxc gap1">
+              <span class="badge e3">✓ Facturado</span>
+              <span class="mono text-sm">N° {{ pe.numero_factura }}</span>
+              <span class="text-muted text-sm">{{ pe.fecha_factura }}</span>
+            </div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="openModal('modal-refacturar')">Editar</button>
+        </div>
+        {% else %}
+        <div class="fxc gap2 jb">
+          <div>
+            <div class="dl-label" style="color:var(--warn)">⚠ Pendiente de facturar</div>
+            <div class="text-sm text-muted">Este PE aún no tiene factura registrada</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openModal('modal-facturar')">Registrar factura</button>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- EDITAR -->
+      {% if not es_eliminado %}
+      <details style="margin-top:1rem">
+        <summary style="cursor:pointer;font-size:.78rem;color:var(--acc);list-style:none;font-weight:600">✏ Editar datos</summary>
+        <form method="post" action="{{ url_for('editar_pe', pe_id=pe.id) }}" style="margin-top:1rem">
+          <div class="form-row fr2">
+            <div class="form-group">
+              <label>Producto</label>
+              <input type="text" name="producto" value="{{ pe.producto or '' }}">
+            </div>
+            <div class="form-group">
+              <label>N° PE oficial</label>
+              <input type="text" name="numero_pe" value="{{ pe.numero_pe or '' }}" placeholder="26040EC01000961H">
+            </div>
+          </div>
+          <div class="form-row fr3">
+            <div class="form-group">
+              <label>Ton. solicitadas</label>
+              <input type="number" name="toneladas_solicitadas" step="0.001" value="{{ pe.toneladas_solicitadas or '' }}">
+            </div>
+            <div class="form-group">
+              <label>N° OC</label>
+              <input type="text" name="numero_oc" value="{{ pe.numero_oc or '' }}">
+            </div>
+            <div class="form-group">
+              <label>Notas</label>
+              <input type="text" name="notas" value="{{ pe.notas or '' }}">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Guardar cambios</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+
+    <!-- ARCHIVOS -->
+    <div class="card">
+      <div class="card-title">Archivos adjuntos</div>
+      <div class="dl-label mb1">📥 Solicitud de Bunge</div>
+      {% if pe.archivo_solicitud %}
+      <div class="archivo-item">
+        <div class="archivo-icon">📄</div>
+        <div class="archivo-info"><div class="archivo-nombre">Solicitud adjunta</div><div class="archivo-meta">Recibido con la solicitud</div></div>
+        <a href="{{ url_for('uploaded_file', filename=pe.archivo_solicitud) }}" target="_blank" class="btn btn-outline btn-sm">Abrir</a>
+      </div>
+      {% else %}<div class="archivo-none">Sin archivo adjunto</div>{% endif %}
+
+      <div class="dl-label mb1 mt2">📋 PE Oficializado</div>
+      {% if pe.archivo_oficializado %}
+      <div class="archivo-item">
+        <div class="archivo-icon">📄</div>
+        <div class="archivo-info"><div class="archivo-nombre">{{ pe.numero_pe or 'PE Oficializado' }}</div><div class="archivo-meta">Recibido del despachante</div></div>
+        <a href="{{ url_for('uploaded_file', filename=pe.archivo_oficializado) }}" target="_blank" class="btn btn-outline btn-sm">Abrir</a>
+      </div>
+      {% else %}<div class="archivo-none">Sin archivo{% if idx < 2 %} — se adjuntará al recibir el oficializado{% endif %}</div>{% endif %}
+
+      <div class="dl-label mb1 mt2">✅ PE Cumplido</div>
+      {% if pe.archivo_cumplido %}
+      <div class="archivo-item">
+        <div class="archivo-icon">📄</div>
+        <div class="archivo-info"><div class="archivo-nombre">PE Cumplido</div><div class="archivo-meta">Enviado a Bunge</div></div>
+        <a href="{{ url_for('uploaded_file', filename=pe.archivo_cumplido) }}" target="_blank" class="btn btn-outline btn-sm">Abrir</a>
+      </div>
+      {% else %}<div class="archivo-none">Sin archivo{% if idx < 5 %} — se adjuntará al enviar el cumplido{% endif %}</div>{% endif %}
+    </div>
+  </div>
+
+  <!-- COLUMNA DERECHA: HISTORIAL -->
+  <div>
+    <div class="card">
+      <div class="card-title">Historial de cambios</div>
+      {% if historial %}
+      <div class="timeline">
+        {% for h in historial %}
+        <div class="tl-item">
+          <div class="tl-date">{{ format_fecha(h.fecha) }}</div>
+          <div class="tl-content">
+            <div class="tl-estado">{{ estado_label(h.estado_nuevo) }}</div>
+            <div class="tl-usuario">{{ h.usuario or 'Sistema' }}</div>
+            {% if h.notas %}<div class="tl-notas">{{ h.notas }}</div>{% endif %}
+            {% if h.archivo %}<a href="{{ url_for('uploaded_file', filename=h.archivo) }}" target="_blank" class="tl-archivo">📎 Ver archivo adjunto</a>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-muted text-sm">Sin historial aún.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+{% set accion = ACCIONES.get(pe.estado, (None, None)) %}
+
+<!-- MODAL AVANZAR -->
+{% if not pe.eliminado and accion[0] %}
+<div class="modal-overlay" id="modal-avanzar">
+  <div class="modal">
+    <div class="modal-title">{{ accion[0] }}</div>
+    <form method="post" action="{{ url_for('avanzar_estado', pe_id=pe.id) }}" enctype="multipart/form-data">
+
+      {% if accion[1] == 'ENVIADO_DESPACHANTE' %}
+      <div class="form-group">
+        <label>Despachante *</label>
+        <select name="despachante_id" required>
+          <option value="">— Seleccioná —</option>
+          {% for d in despachantes %}
+          <option value="{{ d.id }}" {% if pe.despachante_id==d.id %}selected{% endif %}>{{ d.nombre }}</option>
+          {% endfor %}
+        </select>
+        <div class="file-hint"><a href="{{ url_for('despachantes') }}">+ Agregar despachante</a></div>
+      </div>
+      {% endif %}
+
+      {% if accion[1] == 'OFICIALIZADO_RECIBIDO' %}
+      <div class="form-group">
+        <label>Archivo PE Oficializado</label>
+        <input type="file" name="archivo" id="archivo-pe-of" accept=".pdf" onchange="extraerPEOficializado(this)">
+        <div class="file-hint">Al subir el PDF se extraen los datos automáticamente</div>
+      </div>
+      <div id="extrayendo-pe" style="display:none;padding:.6rem .9rem;background:var(--acc-lt);border-radius:6px;color:var(--acc);font-size:.82rem;margin-bottom:.75rem">⏳ Leyendo PE oficializado…</div>
+      <div id="extraido-pe" style="display:none;padding:.6rem .9rem;background:var(--go-lt);border-radius:6px;color:var(--go);font-size:.82rem;margin-bottom:.75rem">✓ Datos extraídos — revisá y confirmá</div>
+      <div class="form-row fr2">
+        <div class="form-group">
+          <label>N° PE oficial</label>
+          <input type="text" name="numero_pe" id="f-pe-numero" value="{{ pe.numero_pe or '' }}" placeholder="26040EC01000961H">
+        </div>
+        <div class="form-group">
+          <label>Vto. Embarque</label>
+          <input type="text" name="vto_embarque" id="f-pe-vto" value="{{ pe.vto_embarque or '' }}" placeholder="26/07/2026">
+        </div>
+      </div>
+      <div class="form-row fr2">
+        <div class="form-group">
+          <label>Fecha oficialización</label>
+          <input type="text" name="fecha_oficializacion" id="f-pe-fecha-of" value="{{ pe.fecha_oficializacion or '' }}" placeholder="25/06/2026 16:58:00">
+        </div>
+        <div class="form-group">
+          <label>Destino</label>
+          <input type="text" name="destino_pe" id="f-pe-destino" placeholder="INDIA">
+        </div>
+      </div>
+      {% endif %}
+
+      {% if accion[1] == 'CUMPLIDO_PENDIENTE' %}
+      <div class="form-row fr2">
+        <div class="form-group">
+          <label>Toneladas cargadas *</label>
+          <input type="number" name="toneladas_cargadas" step="0.001" placeholder="15820.000" required>
+        </div>
+        <div class="form-group">
+          <label>Fecha y hora fin de carga *</label>
+          <input type="datetime-local" name="fecha_fin_carga" required>
+        </div>
+      </div>
+      <div class="file-hint" style="margin-bottom:.75rem;color:var(--warn)">⚠ Ambos campos son obligatorios</div>
+      {% endif %}
+
+      {% if accion[1] == 'CUMPLIDO_ENVIADO' %}
+      <div class="form-group">
+        <label>Archivo PE Cumplido</label>
+        <input type="file" name="archivo" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+        <div class="file-hint">Adjuntá el PDF del PE cumplido</div>
+      </div>
+      {% endif %}
+
+      <div class="form-group">
+        <label>Notas (opcional)</label>
+        <textarea name="notas" rows="2" placeholder="Observaciones…"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Registrado por</label>
+        <select name="usuario">
+          {% for u in usuarios %}<option>{{ u.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-avanzar')">Cancelar</button>
+        <button type="submit" class="btn btn-go">Confirmar →</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- MODAL FACTURAR -->
+{% if not pe.eliminado and estado_index(pe.estado) >= 4 and not pe.facturado %}
+<div class="modal-overlay" id="modal-facturar">
+  <div class="modal">
+    <div class="modal-title">Registrar factura</div>
+    <form method="post" action="{{ url_for('facturar_pe', pe_id=pe.id) }}">
+      <div class="form-row fr2">
+        <div class="form-group"><label>Número de factura *</label><input type="text" name="numero_factura" required placeholder="A-0001-00001234"></div>
+        <div class="form-group"><label>Fecha de factura *</label><input type="date" name="fecha_factura" required></div>
+      </div>
+      <div class="form-group"><label>Registrado por</label><select name="usuario">{% for u in usuarios %}<option>{{ u.nombre }}</option>{% endfor %}</select></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-facturar')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar factura</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- MODAL EDITAR FACTURA -->
+{% if pe.facturado %}
+<div class="modal-overlay" id="modal-refacturar">
+  <div class="modal">
+    <div class="modal-title">Editar factura</div>
+    <form method="post" action="{{ url_for('facturar_pe', pe_id=pe.id) }}">
+      <div class="form-row fr2">
+        <div class="form-group"><label>Número de factura *</label><input type="text" name="numero_factura" required value="{{ pe.numero_factura or '' }}"></div>
+        <div class="form-group"><label>Fecha de factura *</label><input type="date" name="fecha_factura" required value="{{ pe.fecha_factura or '' }}"></div>
+      </div>
+      <div class="form-group"><label>Registrado por</label><select name="usuario">{% for u in usuarios %}<option>{{ u.nombre }}</option>{% endfor %}</select></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-refacturar')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Actualizar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- MODAL ELIMINAR -->
+<div class="modal-overlay" id="modal-eliminar">
+  <div class="modal">
+    <div class="modal-title" style="color:var(--danger)">⚠ Eliminar PE #{{ pe.id }}</div>
+    <p style="font-size:.88rem;color:var(--ink2);margin-bottom:1.25rem">
+      El PE quedará marcado como <strong>ELIMINADO</strong> y no podrá operarse. Se eliminan los archivos adjuntos.
+    </p>
+    <form method="post" action="{{ url_for('eliminar_pe', pe_id=pe.id) }}">
+      <div class="form-group">
+        <label>Escribí <strong>borrar</strong> para confirmar</label>
+        <input type="text" name="confirmacion" placeholder="borrar" autocomplete="off"
+               oninput="document.getElementById('btn-eliminar').disabled = this.value.toLowerCase() !== 'borrar'">
+      </div>
+      <div class="form-group"><label>Registrado por</label><select name="usuario">{% for u in usuarios %}<option>{{ u.nombre }}</option>{% endfor %}</select></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-eliminar')">Cancelar</button>
+        <button type="submit" id="btn-eliminar" class="btn btn-danger" disabled>Marcar como eliminado</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function extraerPEOficializado(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('extrayendo-pe').style.display = 'block';
+  document.getElementById('extraido-pe').style.display = 'none';
+  const formData = new FormData();
+  formData.append('archivo', file);
+  try {
+    const resp = await fetch('/api/extraer-pe-oficializado', { method: 'POST', body: formData });
+    const datos = await resp.json();
+    document.getElementById('extrayendo-pe').style.display = 'none';
+    let cargado = false;
+    if (datos.numero_pe)           { document.getElementById('f-pe-numero').value   = datos.numero_pe;           cargado = true; }
+    if (datos.vto_embarque)        { document.getElementById('f-pe-vto').value       = datos.vto_embarque;        cargado = true; }
+    if (datos.fecha_oficializacion){ document.getElementById('f-pe-fecha-of').value  = datos.fecha_oficializacion;cargado = true; }
+    if (datos.destino)             { document.getElementById('f-pe-destino').value   = datos.destino;             cargado = true; }
+    if (cargado) document.getElementById('extraido-pe').style.display = 'block';
+  } catch(e) {
+    document.getElementById('extrayendo-pe').style.display = 'none';
+  }
+}
+</script>
+{% endblock %}

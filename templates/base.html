@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Trimar · PE{% endblock %}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#0f1923;--ink2:#3a4a58;--ink3:#7a8fa0;--wire:#dce4eb;--bg:#f2f5f8;--surf:#fff;
+  --acc:#005b9a;--acc-lt:#e8f1f9;--go:#007a4c;--go-lt:#e6f5ef;
+  --warn:#c05a00;--warn-lt:#fdf0e6;--danger:#922b21;--danger-lt:#fdf0ef;
+  --c0:#005b9a;--c0b:#e8f1f9;--c1:#6b46c1;--c1b:#f3f0ff;
+  --c2:#b07d00;--c2b:#fef9e7;--c3:#007a4c;--c3b:#e6f5ef;
+  --c4:#00707a;--c4b:#e6f5f6;--c5:#1a5276;--c5b:#eaf0f8;
+  --c6:#c05a00;--c6b:#fdf0e6;--c7:#2e4057;--c7b:#e8ecf0;
+}
+body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+
+/* LOGIN OVERLAY */
+.login-overlay{display:none;position:fixed;inset:0;background:rgba(15,25,35,.75);z-index:500;align-items:center;justify-content:center}
+.login-overlay.open{display:flex}
+.login-box{background:var(--surf);border-radius:12px;padding:2.5rem;width:100%;max-width:380px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.25)}
+.login-logo{font-family:'IBM Plex Mono',monospace;font-size:1.4rem;font-weight:600;color:var(--ink);margin-bottom:.25rem}
+.login-logo span{color:#5aaee0}
+.login-sub{font-size:.82rem;color:var(--ink3);margin-bottom:2rem}
+.login-box label{text-align:left;display:block;font-size:.75rem;font-weight:600;color:var(--ink2);margin-bottom:.35rem;letter-spacing:.03em}
+.login-box select{width:100%;padding:.65rem .85rem;border:2px solid var(--wire);border-radius:8px;font-family:'IBM Plex Sans',sans-serif;font-size:.95rem;color:var(--ink);margin-bottom:1.25rem;outline:none}
+.login-box select:focus{border-color:var(--acc)}
+.login-btn{width:100%;padding:.75rem;background:var(--acc);color:#fff;border:none;border-radius:8px;font-size:.95rem;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans',sans-serif}
+.login-btn:hover{background:#004d85}
+
+/* NAV */
+nav{background:var(--ink);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:100}
+.nav-brand{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:.95rem;color:#fff;text-decoration:none;letter-spacing:.08em}
+.nav-brand span{color:#5aaee0}
+.nav-left{display:flex;align-items:center;gap:1.5rem}
+.nav-links{display:flex;gap:.25rem}
+.nav-links a{color:#a8bfd4;text-decoration:none;font-size:.82rem;font-weight:500;padding:.35rem .75rem;border-radius:4px;transition:background .15s,color .15s;letter-spacing:.02em}
+.nav-links a:hover,.nav-links a.active{background:rgba(255,255,255,.1);color:#fff}
+.nav-user{display:flex;align-items:center;gap:.5rem;color:#a8bfd4;font-size:.8rem;cursor:pointer;padding:.3rem .6rem;border-radius:4px;transition:background .15s}
+.nav-user:hover{background:rgba(255,255,255,.1);color:#fff}
+.nav-user-dot{width:7px;height:7px;border-radius:50%;background:#5aaee0;flex-shrink:0}
+
+/* LAYOUT */
+.container{max-width:1280px;margin:0 auto;padding:2rem 1.5rem}
+
+/* PAGE HEADER */
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.75rem;gap:1rem;flex-wrap:wrap}
+.page-title{font-size:1.35rem;font-weight:600}
+.page-subtitle{font-size:.82rem;color:var(--ink3);margin-top:.2rem;font-family:'IBM Plex Mono',monospace}
+
+/* DASHBOARD */
+.dash-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.75rem}
+.dash-card{background:var(--surf);border:1px solid var(--wire);border-radius:8px;padding:1.1rem 1.25rem}
+.dash-card .num{font-family:'IBM Plex Mono',monospace;font-size:2rem;font-weight:600;line-height:1}
+.dash-card .lbl{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink3);margin-top:.4rem}
+.dash-card .sub{font-size:.75rem;color:var(--ink3);margin-top:.25rem}
+.dash-card.alerta .num{color:var(--warn)}
+.dash-card.trimar .num{color:var(--acc)}
+.dash-card.desp .num{color:var(--c1)}
+.dash-card.bunge .num{color:var(--go)}
+
+/* STAT PILLS */
+.stats-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.25rem}
+.stat-pill{display:inline-flex;align-items:center;gap:.45rem;padding:.35rem .75rem;border-radius:20px;font-size:.78rem;font-weight:500;cursor:pointer;text-decoration:none;border:1.5px solid transparent;transition:all .15s}
+.stat-pill:hover{filter:brightness(.95)}
+.stat-pill.active{border-color:currentColor}
+.stat-pill .num{font-family:'IBM Plex Mono',monospace;font-weight:600}
+.e0{background:var(--c0b);color:var(--c0)}.e1{background:var(--c1b);color:var(--c1)}
+.e2{background:var(--c2b);color:var(--c2)}.e3{background:var(--c3b);color:var(--c3)}
+.e4{background:var(--c4b);color:var(--c4)}.e5{background:var(--c5b);color:var(--c5)}
+.e6{background:var(--c6b);color:var(--c6)}.e7{background:var(--c7b);color:var(--c7)}
+.e-elim{background:#f2f5f8;color:#7a8fa0}
+
+/* FILTERS */
+.filter-bar{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1.25rem;align-items:flex-end}
+.filter-bar input,.filter-bar select{padding:.45rem .75rem;border:1.5px solid var(--wire);border-radius:6px;font-family:'IBM Plex Sans',sans-serif;font-size:.83rem;color:var(--ink);background:var(--surf);outline:none}
+.filter-bar input:focus,.filter-bar select:focus{border-color:var(--acc)}
+.filter-bar input[type=text]{width:240px}
+.filter-bar input[type=date]{width:150px}
+
+/* CARD */
+.card{background:var(--surf);border:1px solid var(--wire);border-radius:8px;padding:1.25rem 1.5rem}
+.card+.card{margin-top:1rem}
+.card-title{font-size:.72rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:1rem;font-family:'IBM Plex Mono',monospace}
+
+/* TABLE */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.84rem}
+th{text-align:left;font-size:.68rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:.6rem 1rem;border-bottom:2px solid var(--wire);font-family:'IBM Plex Mono',monospace;white-space:nowrap}
+td{padding:.8rem 1rem;border-bottom:1px solid var(--wire);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#f7f9fb}
+.td-mono{font-family:'IBM Plex Mono',monospace;font-size:.79rem}
+.td-alerta td{background:#fffaf5 !important}
+.td-eliminado td{background:#f8f8f8 !important;opacity:.6}
+
+/* BADGE */
+.badge{display:inline-flex;align-items:center;gap:.3rem;padding:.22rem .55rem;border-radius:4px;font-size:.7rem;font-weight:600;letter-spacing:.03em;font-family:'IBM Plex Mono',monospace;white-space:nowrap}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.7;flex-shrink:0}
+.badge-alerta{background:#fff3e6;color:#c05a00;border:1px solid #f5c48a}
+.badge-elim{background:#f2f5f8;color:#7a8fa0}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem 1.1rem;border-radius:6px;font-size:.82rem;font-weight:500;font-family:'IBM Plex Sans',sans-serif;cursor:pointer;border:none;text-decoration:none;transition:all .15s;white-space:nowrap}
+.btn-primary{background:var(--acc);color:#fff}.btn-primary:hover{background:#004d85}
+.btn-go{background:var(--go);color:#fff}.btn-go:hover{background:#005c38}
+.btn-outline{background:transparent;color:var(--ink2);border:1.5px solid var(--wire)}.btn-outline:hover{background:var(--bg)}
+.btn-sm{padding:.32rem .75rem;font-size:.77rem}
+.btn-danger{background:var(--danger);color:#fff}
+
+/* FORMS */
+label{display:block;font-size:.74rem;font-weight:600;color:var(--ink2);margin-bottom:.3rem;letter-spacing:.03em}
+input[type=text],input[type=email],input[type=number],input[type=date],input[type=time],
+select,textarea{width:100%;padding:.52rem .75rem;border:1.5px solid var(--wire);border-radius:6px;font-family:'IBM Plex Sans',sans-serif;font-size:.84rem;color:var(--ink);background:var(--surf);outline:none;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-lt)}
+input[type=file]{padding:.4rem .5rem;font-size:.8rem}
+.form-group{margin-bottom:1rem}
+.form-row{display:grid;gap:1rem}
+.fr2{grid-template-columns:1fr 1fr}
+.fr3{grid-template-columns:1fr 1fr 1fr}
+.file-hint{font-size:.7rem;color:var(--ink3);margin-top:.25rem}
+
+/* ALERTS */
+.alert{padding:.75rem 1rem;border-radius:6px;font-size:.84rem;margin-bottom:1rem;border-left:3px solid currentColor}
+.alert-success{background:var(--go-lt);color:var(--go)}
+.alert-danger{background:var(--danger-lt);color:var(--danger)}
+.alert-warning{background:var(--warn-lt);color:var(--warn)}
+.alert-info{background:var(--acc-lt);color:var(--acc)}
+
+/* PROGRESS */
+.progress-wrap{overflow-x:auto;padding-bottom:.5rem}
+.progress-track{display:flex;align-items:flex-start;min-width:max-content;padding:.25rem 0}
+.prog-col{display:flex;flex-direction:column;align-items:center;flex-shrink:0}
+.prog-dot{width:30px;height:30px;border-radius:50%;border:2px solid var(--wire);background:var(--surf);display:flex;align-items:center;justify-content:center;font-size:.65rem;font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--ink3);position:relative;z-index:1}
+.prog-dot.done{background:var(--go);border-color:var(--go);color:#fff}
+.prog-dot.current{background:var(--acc);border-color:var(--acc);color:#fff;box-shadow:0 0 0 4px var(--acc-lt)}
+.prog-line{height:2px;width:44px;background:var(--wire);flex-shrink:0;margin-top:14px}
+.prog-line.done{background:var(--go)}
+.prog-label{font-size:.65rem;color:var(--ink3);text-align:center;margin-top:.35rem;max-width:72px;line-height:1.3}
+.prog-label.current{color:var(--acc);font-weight:600}
+.prog-label.done{color:var(--go)}
+
+/* DETAIL */
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+.dl-row{margin-bottom:.85rem}
+.dl-label{font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink3);font-family:'IBM Plex Mono',monospace;margin-bottom:.2rem}
+.dl-value{font-size:.88rem;color:var(--ink)}
+
+/* ARCHIVOS */
+.archivo-item{display:flex;align-items:center;gap:.75rem;padding:.6rem .75rem;border:1.5px solid var(--wire);border-radius:6px;margin-bottom:.5rem;background:var(--bg)}
+.archivo-icon{font-size:1.2rem;flex-shrink:0}
+.archivo-info{flex:1;min-width:0}
+.archivo-nombre{font-size:.8rem;font-weight:600;color:var(--ink)}
+.archivo-meta{font-size:.7rem;color:var(--ink3)}
+.archivo-none{font-size:.8rem;color:var(--ink3);font-style:italic;padding:.4rem 0}
+
+/* TIMELINE */
+.timeline{display:flex;flex-direction:column}
+.tl-item{display:flex;gap:1rem;padding:.7rem 0;border-left:2px solid var(--wire);padding-left:1.25rem;position:relative}
+.tl-item::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--ink3);position:absolute;left:-5px;top:1rem}
+.tl-item:first-child::before{background:var(--acc)}
+.tl-date{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--ink3);min-width:130px;padding-top:.1rem;flex-shrink:0}
+.tl-content{flex:1}
+.tl-estado{font-weight:600;font-size:.83rem}
+.tl-usuario{font-size:.73rem;color:var(--ink3)}
+.tl-notas{font-size:.78rem;color:var(--ink2);margin-top:.2rem;font-style:italic}
+.tl-archivo{display:inline-flex;align-items:center;gap:.3rem;font-size:.73rem;color:var(--acc);text-decoration:none;margin-top:.25rem}
+.tl-archivo:hover{text-decoration:underline}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,25,35,.55);z-index:200;align-items:center;justify-content:center;padding:1rem}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surf);border-radius:10px;padding:1.75rem;width:100%;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,.2);max-height:90vh;overflow-y:auto}
+.modal-title{font-size:1.05rem;font-weight:600;margin-bottom:1.25rem}
+.modal-actions{display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.25rem}
+
+/* EMPTY */
+.empty{text-align:center;padding:4rem 2rem;color:var(--ink3)}
+.empty-icon{font-size:2.5rem;margin-bottom:1rem}
+.empty-title{font-weight:600;color:var(--ink2);margin-bottom:.5rem}
+.empty-sub{font-size:.84rem}
+
+/* UTILS */
+.mono{font-family:'IBM Plex Mono',monospace}
+.text-muted{color:var(--ink3);font-size:.82rem}
+.text-sm{font-size:.82rem}
+.fw6{font-weight:600}
+.mt1{margin-top:.5rem}.mt2{margin-top:1rem}.mt3{margin-top:1.5rem}
+.mb1{margin-bottom:.5rem}.mb2{margin-bottom:1rem}
+.flex{display:flex}.fxc{display:flex;align-items:center}
+.gap1{gap:.5rem}.gap2{gap:1rem}
+.jb{justify-content:space-between}
+.diff-pos{color:var(--go);font-weight:600}
+.diff-neg{color:var(--danger);font-weight:600}
+
+@media(max-width:768px){
+  .container{padding:1rem}
+  .detail-grid{grid-template-columns:1fr}
+  .fr2,.fr3{grid-template-columns:1fr}
+  nav{padding:0 1rem}
+  .dash-row{grid-template-columns:1fr 1fr}
+  .filter-bar input[type=text]{width:100%}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div class="login-overlay" id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">TRIMAR <span>PE</span></div>
+    <div class="login-sub">Puerto Quequén · Permisos de Embarque</div>
+    <label>¿Quién sos?</label>
+    <select id="login-select">
+      <option value="">— Seleccioná tu nombre —</option>
+    </select>
+    <button class="login-btn" onclick="confirmarLogin()">Entrar</button>
+  </div>
+</div>
+
+<nav>
+  <div class="nav-left">
+    <a class="nav-brand" href="{{ url_for('index') }}">TRIMAR <span>PE</span></a>
+    <div class="nav-links">
+      <a href="{{ url_for('index') }}" {% if request.endpoint=='index' %}class="active"{% endif %}>Permisos</a>
+      <a href="{{ url_for('despachantes') }}" {% if request.endpoint=='despachantes' %}class="active"{% endif %}>Despachantes</a>
+      <a href="{{ url_for('usuarios') }}" {% if request.endpoint=='usuarios' %}class="active"{% endif %}>Usuarios</a>
+    </div>
+  </div>
+  <div class="nav-user" onclick="cambiarUsuario()" id="nav-user-btn" title="Cambiar usuario">
+    <div class="nav-user-dot"></div>
+    <span id="nav-user-nombre">Cargando…</span>
+    <span style="font-size:.7rem;opacity:.6">↕</span>
+  </div>
+</nav>
+
+<div class="container">
+  {% with messages=get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat,msg in messages %}
+      <div class="alert alert-{{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</div>
+
+{% block modals %}{% endblock %}
+
+<script>
+// ── USUARIO EN LOCALSTORAGE ────────────────────────────────────────────────────
+const LS_KEY = 'trimar_pe_usuario';
+
+function getUsuario() {
+  return localStorage.getItem(LS_KEY) || '';
+}
+
+function setUsuario(nombre) {
+  localStorage.setItem(LS_KEY, nombre);
+  document.getElementById('nav-user-nombre').textContent = nombre;
+}
+
+function cambiarUsuario() {
+  document.getElementById('login-overlay').classList.add('open');
+}
+
+function confirmarLogin() {
+  const sel = document.getElementById('login-select');
+  const nombre = sel.value;
+  if (!nombre) { sel.style.borderColor='var(--danger)'; return; }
+  setUsuario(nombre);
+  document.getElementById('login-overlay').classList.remove('open');
+  // Completar todos los campos de usuario en la página
+  rellenarUsuarios();
+}
+
+function rellenarUsuarios() {
+  const nombre = getUsuario();
+  document.querySelectorAll('select[name="usuario"]').forEach(sel => {
+    for (let opt of sel.options) {
+      if (opt.value === nombre || opt.text === nombre) {
+        sel.value = opt.value;
+        break;
+      }
+    }
+  });
+}
+
+async function cargarUsuariosLogin() {
+  try {
+    const resp = await fetch('/api/usuarios');
+    const lista = await resp.json();
+    const sel = document.getElementById('login-select');
+    const actual = getUsuario();
+    lista.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.nombre;
+      opt.text = u.nombre;
+      if (u.nombre === actual) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', async () => {
+  await cargarUsuariosLogin();
+  const usuario = getUsuario();
+  if (!usuario) {
+    document.getElementById('login-overlay').classList.add('open');
+  } else {
+    document.getElementById('nav-user-nombre').textContent = usuario;
+    rellenarUsuarios();
+  }
+});
+
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click',e=>{if(e.target===m && m.id!=='login-overlay')m.classList.remove('open')})
+})
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

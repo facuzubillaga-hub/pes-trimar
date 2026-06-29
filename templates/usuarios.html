@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Trimar · Usuarios{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><div class="page-title">Usuarios</div><div class="page-subtitle">Quiénes registran cambios en el sistema</div></div>
+  <button class="btn btn-primary" onclick="openModal('modal-nuevo-user')">＋ Agregar</button>
+</div>
+<div class="card" style="padding:0">
+{% if usuarios %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Nombre</th><th>Estado</th></tr></thead>
+  <tbody>
+  {% for u in usuarios %}
+  <tr>
+    <td class="fw6">{{ u.nombre }}</td>
+    <td>{% if u.activo %}<span class="badge e3">Activo</span>{% else %}<span class="badge e7">Inactivo</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="empty"><div class="empty-icon">👥</div><div class="empty-title">No hay usuarios</div></div>
+{% endif %}
+</div>
+{% endblock %}
+{% block modals %}
+<div class="modal-overlay" id="modal-nuevo-user">
+  <div class="modal">
+    <div class="modal-title">Nuevo usuario</div>
+    <form method="post" action="{{ url_for('nuevo_usuario') }}">
+      <div class="form-group"><label>Nombre *</label><input type="text" name="nombre" required placeholder="Nombre del operador"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-nuevo-user')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

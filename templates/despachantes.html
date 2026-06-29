@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Trimar · Despachantes{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><div class="page-title">Despachantes</div><div class="page-subtitle">Gestión de despachantes de aduana</div></div>
+  <button class="btn btn-primary" onclick="openModal('modal-nuevo-desp')">＋ Agregar</button>
+</div>
+<div class="card" style="padding:0">
+{% if despachantes %}
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Nombre</th><th>Email</th><th>Estado</th><th></th></tr></thead>
+  <tbody>
+  {% for d in despachantes %}
+  <tr>
+    <td class="fw6">{{ d.nombre }}</td>
+    <td class="td-mono text-muted">{{ d.email or '—' }}</td>
+    <td>{% if d.activo %}<span class="badge e3">Activo</span>{% else %}<span class="badge e7">Inactivo</span>{% endif %}</td>
+    <td>
+      <form method="post" action="{{ url_for('toggle_despachante', d_id=d.id) }}" style="display:inline">
+        <button type="submit" class="btn btn-outline btn-sm">{% if d.activo %}Desactivar{% else %}Activar{% endif %}</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="empty"><div class="empty-icon">👤</div><div class="empty-title">No hay despachantes</div><div class="empty-sub">Agregá el primero para asignarlo a los PEs</div></div>
+{% endif %}
+</div>
+{% endblock %}
+{% block modals %}
+<div class="modal-overlay" id="modal-nuevo-desp">
+  <div class="modal">
+    <div class="modal-title">Nuevo despachante</div>
+    <form method="post" action="{{ url_for('nuevo_despachante') }}">
+      <div class="form-group"><label>Nombre *</label><input type="text" name="nombre" required placeholder="Nombre o razón social"></div>
+      <div class="form-group"><label>Email</label><input type="email" name="email" placeholder="correo@despachante.com"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-nuevo-desp')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
