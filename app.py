@@ -1,689 +1,664 @@
-import os, json, re, base64, sqlite3
-from flask import Flask, request, jsonify, send_file, render_template, g, session, redirect, url_for
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
-import anthropic
-import tempfile
-from plan_cargas_parser import parse_plan_cargas
-from gmail_helper import (
-    get_flow, get_credentials, save_credentials, get_gmail_service,
-    get_pdf_attachments_from_message, fetch_new_emails,
-    mark_as_read, get_message_sender,
-    BUNGE_SENDERS, PE_SENDER_DOMAIN
-)
+from flask import (Flask, render_template, request, redirect,
+                   url_for, flash, send_from_directory, abort, jsonify)
+import sqlite3, os, uuid, re
+from datetime import datetime
+from werkzeug.utils import secure_filename
+import requests as http_requests
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET", "trimar-secret-2026")
+app.secret_key = os.environ.get('SECRET_KEY', 'trimar-pe-secret-2024')
 
-DATA_DIR = "/data" if os.path.exists("/data") else os.path.dirname(__file__)
-DB_PATH = os.path.join(DATA_DIR, "permisos.db")
+UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', '/data/uploads')
+DB_PATH       = os.environ.get('DB_PATH', 'pe.db')
+ALERTA_HORAS  = int(os.environ.get('ALERTA_HORAS', 24))
+ALLOWED_EXT   = {'pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'}
 
-HEADERS_PE = [
-    "Nº PE", "Fecha Oficialización", "Buque", "Bandera", "País Destino",
-    "Mercadería", "Posición Arancelaria", "Cond. Venta",
-    "Peso Bruto (kg)", "Toneladas", "FOB Total (USD)", "Flete (USD)",
-    "Precio Unit. (USD/Tn)", "Precio Oficial (USD/Tn)",
-    "DJVE", "Fecha Cierre Vta.", "Vto. Embarque", "Ant. Gan. (USD)", "Cotización"
-]
-FIELDS_PE = [
-    "nro_pe", "fecha_oficializacion", "buque", "bandera", "pais_destino",
-    "mercaderia", "posicion_arancelaria", "cond_venta",
-    "peso_bruto_kg", "toneladas", "fob_total_usd", "flete_usd",
-    "precio_unit_usd_tn", "precio_oficial_usd_tn",
-    "djve", "fecha_cierre_vta", "vto_embarque", "ant_gan_usd", "cotizacion"
-]
-HEADERS_SOL = [
-    "Buque", "Bandera", "Destino", "Producto", "Cantidad (Tn)",
-    "DJVE", "Contrato", "Cond. Venta", "Precio FOB (USD/Tn)",
-    "Importe Total (USD)", "Fecha Solicitud", "Fecha Vta.", "Booking", "Estado PE"
-]
-FIELDS_SOL = [
-    "buque", "bandera", "destino", "producto", "cantidad_tn",
-    "djve", "contrato", "cond_venta", "precio_fob_usd_tn",
-    "importe_total_usd", "fecha_solicitud", "fecha_vta", "booking"
-]
-FIELDS_PC = [
-    "semana", "buque", "booking", "producto", "consignee",
-    "cantidad_contenedores", "toneladas", "pod", "etd", "fecha_carga",
-    "contrato", "envase", "linea"
-]
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '')
+MAIL_FROM      = os.environ.get('MAIL_FROM', 'Trimar PE <onboarding@resend.dev>')
 
-# ---------- DB ----------
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# ── ESTADOS (6 pasos, sin provisorio) ─────────────────────────────────────────
+ESTADOS = [
+    ('SOLICITUD_RECIBIDA',    'Solicitud recibida',    'Bunge envió la solicitud'),
+    ('ENVIADO_DESPACHANTE',   'Enviado a despachante', 'Derivado al despachante'),
+    ('OFICIALIZADO_RECIBIDO', 'Oficializado recibido', 'Despachante envió el PE oficial'),
+    ('ENVIADO_BUNGE',         'Enviado a Bunge',       'PE oficial enviado a Bunge'),
+    ('CUMPLIDO_PENDIENTE',    'Cumplido pendiente',    'Buque terminó de cargar'),
+    ('CUMPLIDO_ENVIADO',      'Cumplido enviado',      'PE cumplido enviado a Bunge'),
+]
+ESTADO_KEYS = [e[0] for e in ESTADOS]
+
+ACCIONES = {
+    'SOLICITUD_RECIBIDA':    ('Enviar al despachante',   'ENVIADO_DESPACHANTE'),
+    'ENVIADO_DESPACHANTE':   ('Registrar oficializado',  'OFICIALIZADO_RECIBIDO'),
+    'OFICIALIZADO_RECIBIDO': ('Enviar a Bunge',          'ENVIADO_BUNGE'),
+    'ENVIADO_BUNGE':         ('Registrar fin de carga',  'CUMPLIDO_PENDIENTE'),
+    'CUMPLIDO_PENDIENTE':    ('Enviar cumplido a Bunge', 'CUMPLIDO_ENVIADO'),
+    'CUMPLIDO_ENVIADO':      (None, None),
+}
+
+ESPERA_TRIMAR      = {'SOLICITUD_RECIBIDA','OFICIALIZADO_RECIBIDO','CUMPLIDO_PENDIENTE'}
+ESPERA_DESPACHANTE = {'ENVIADO_DESPACHANTE'}
+ESPERA_BUNGE       = {'ENVIADO_BUNGE'}
+
+# ── HELPERS ────────────────────────────────────────────────────────────────────
 def get_db():
-    db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(DB_PATH)
-        db.row_factory = sqlite3.Row
-    return db
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-@app.teardown_appcontext
-def close_db(exc):
-    db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXT
 
+def save_upload(file):
+    if not file or file.filename == '':
+        return None, None
+    if not allowed_file(file.filename):
+        return None, 'Tipo de archivo no permitido'
+    ext = file.filename.rsplit('.', 1)[1].lower()
+    unique_name = f"{uuid.uuid4().hex}.{ext}"
+    file.save(os.path.join(UPLOAD_FOLDER, unique_name))
+    return unique_name, None
+
+def estado_label(key):
+    if key == 'ELIMINADO': return 'Eliminado'
+    for k, label, _ in ESTADOS:
+        if k == key: return label
+    return key
+
+def estado_desc(key):
+    for k, _, desc in ESTADOS:
+        if k == key: return desc
+    return ''
+
+def estado_index(key):
+    try: return ESTADO_KEYS.index(key)
+    except ValueError: return 0
+
+def horas_en_estado(fecha_str):
+    try:
+        fecha = datetime.fromisoformat(fecha_str)
+        return (datetime.now() - fecha).total_seconds() / 3600
+    except: return 0
+
+def format_fecha(fecha_str):
+    if not fecha_str: return '—'
+    try:
+        dt = datetime.fromisoformat(fecha_str)
+        return dt.strftime('%d/%m/%Y %H:%M')
+    except: return fecha_str
+
+def format_fecha_corta(fecha_str):
+    if not fecha_str: return '—'
+    try:
+        dt = datetime.fromisoformat(fecha_str)
+        return dt.strftime('%d/%m/%y')
+    except: return fecha_str
+
+def format_ton(valor):
+    """Formatea toneladas con 3 decimales."""
+    if valor is None: return '—'
+    try: return f'{float(valor):,.3f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+    except: return str(valor)
+
+def validar_numero_pe(numero):
+    """Valida formato: (2 dígitos año)(EC01)(3 dígitos aduana)(6 dígitos nro)(1 letra)
+    Ej: 26040EC01000961H"""
+    if not numero: return True  # vacío es ok, no es obligatorio
+    patron = r'^\d{2}\d{3}EC\d{2}\d{6}[A-Z]$'
+    # Flexible: acepta también con espacios que se normalizan
+    numero_clean = numero.replace(' ', '')
+    return bool(re.match(r'^\d{5}EC\d{2}\d{6}[A-Z]$', numero_clean))
+
+def registrar_historial(conn, permiso_id, estado_anterior, estado_nuevo, usuario, notas=None, archivo=None):
+    conn.execute('''
+        INSERT INTO historial (permiso_id, estado_anterior, estado_nuevo, usuario, notas, archivo, fecha)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (permiso_id, estado_anterior, estado_nuevo, usuario, notas, archivo, datetime.now().isoformat()))
+
+# ── EXTRACCIÓN PDF SOLICITUD BUNGE ─────────────────────────────────────────────
+def extraer_datos_pdf(filepath):
+    datos = {}
+    try:
+        import pdfplumber
+        with pdfplumber.open(filepath) as pdf:
+            texto = '\n'.join(page.extract_text() or '' for page in pdf.pages)
+
+        m = re.search(r'Buque:.*?\n([A-Z][A-Z ]+?)(?:\s+Producto:|$)', texto, re.MULTILINE)
+        if m: datos['buque'] = m.group(1).strip()
+
+        m = re.search(r'Parcel:\s+(\S+)', texto)
+        if m: datos['parcel'] = m.group(1).strip()
+
+        m = re.search(r'Producto:\s+\d+.*?\n\d+\s+([A-Z][A-Z ]+?)(?:\s+CAE:)', texto, re.MULTILINE)
+        if m: datos['producto'] = m.group(1).strip()
+
+        m = re.search(r'([\d\.]+,\d+)TO\b', texto)
+        if not m: m = re.search(r'([\d\.]+,\d+)\s+TO\b', texto)
+        if m:
+            ton_norm = m.group(1).replace('.','').replace(',','.')
+            try: float(ton_norm); datos['toneladas'] = ton_norm
+            except: pass
+
+        m = re.search(r'Fecha Solicitud:\s+(\d{2}\.\d{2}\.\d{4})', texto)
+        if m: datos['fecha_solicitud'] = m.group(1)
+
+    except Exception as e:
+        datos['error'] = str(e)
+    return datos
+
+# ── EXTRACCIÓN PE OFICIALIZADO ─────────────────────────────────────────────────
+def extraer_datos_pe_oficializado(filepath):
+    datos = {}
+    try:
+        import pdfplumber
+        with pdfplumber.open(filepath) as pdf:
+            texto = '\n'.join(page.extract_text() or '' for page in pdf.pages)
+
+        m = re.search(r'(\d{2})\s+(\d{3})\s+([A-Z]{2}\d{2})\s+(\d{6})\s+([A-Z])\s+\d+ de \d+', texto)
+        if m: datos['numero_pe'] = f"{m.group(1)}{m.group(2)}{m.group(3)}{m.group(4)}{m.group(5)}"
+
+        m = re.search(r'Nombre del Transporte\s*\n\S+\s+\S+\s+\S+\s+([A-Z][A-Z ]+)', texto)
+        if m: datos['buque'] = m.group(1).strip()
+
+        m = re.search(r'TONELADA\s+([\d\.]+,\d+)', texto)
+        if m:
+            ton = m.group(1).replace('.','').replace(',','.')
+            try: float(ton); datos['toneladas'] = ton
+            except: pass
+
+        m = re.search(r'(\d{2}/\d{2}/\d{4})\s+\*{4}', texto)
+        if m: datos['vto_embarque'] = m.group(1)
+
+        m = re.search(r'OFICIALIZADO\s+(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2})', texto)
+        if m: datos['fecha_oficializacion'] = m.group(1)
+
+        m = re.search(r'Pais dest\.:\s*([A-Z]+)', texto)
+        if m: datos['destino'] = m.group(1)
+
+    except Exception as e:
+        datos['error'] = str(e)
+    return datos
+
+# ── EMAIL (Resend) ─────────────────────────────────────────────────────────────
+def enviar_email(destinatario, asunto, cuerpo_html, archivo_path=None, archivo_nombre=None):
+    if not RESEND_API_KEY:
+        return False, 'RESEND_API_KEY no configurado'
+    try:
+        payload = {'from': MAIL_FROM, 'to': [destinatario], 'subject': asunto, 'html': cuerpo_html}
+        if archivo_path and os.path.exists(archivo_path):
+            import base64
+            with open(archivo_path, 'rb') as f:
+                contenido = base64.b64encode(f.read()).decode('utf-8')
+            payload['attachments'] = [{'filename': archivo_nombre or os.path.basename(archivo_path), 'content': contenido}]
+        resp = http_requests.post('https://api.resend.com/emails',
+            headers={'Authorization': f'Bearer {RESEND_API_KEY}', 'Content-Type': 'application/json'},
+            json=payload, timeout=8)
+        if resp.status_code in (200, 201): return True, None
+        return False, f'Resend error {resp.status_code}: {resp.text}'
+    except Exception as e:
+        return False, str(e)
+
+def mail_despachante(pe, despachante, archivo_path=None):
+    if not despachante or not despachante['email']:
+        return False, 'El despachante no tiene email registrado'
+    asunto = f"Solicitud PE — {pe['buque_nombre']} | PARCEL {pe['viaje'] or ''} | {pe['producto'] or ''}"
+    ton_str = format_ton(pe['toneladas_solicitadas']) + ' tn' if pe['toneladas_solicitadas'] else '—'
+    cuerpo = f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:#0f1923;padding:1.5rem 2rem;border-radius:8px 8px 0 0">
+        <h2 style="color:#fff;margin:0;font-size:1.1rem">AGENCIA TRIMAR S.A.</h2>
+        <p style="color:#5aaee0;margin:.25rem 0 0;font-size:.85rem">Puerto Quequén · Permisos de Embarque</p>
+      </div>
+      <div style="background:#f2f5f8;padding:2rem;border-radius:0 0 8px 8px">
+        <p>Estimado/a <strong>{despachante['nombre']}</strong>,</p>
+        <p>Les solicitamos la confección del siguiente Permiso de Embarque:</p>
+        <table style="width:100%;border-collapse:collapse;margin:1.5rem 0;background:#fff;border-radius:6px;overflow:hidden">
+          <tr style="background:#005b9a;color:#fff">
+            <td style="padding:.6rem 1rem;font-size:.8rem;font-weight:600">CAMPO</td>
+            <td style="padding:.6rem 1rem;font-size:.8rem;font-weight:600">DATO</td>
+          </tr>
+          <tr><td style="padding:.6rem 1rem;border-bottom:1px solid #dce4eb;font-size:.85rem;color:#7a8fa0">Buque</td>
+              <td style="padding:.6rem 1rem;border-bottom:1px solid #dce4eb;font-size:.85rem;font-weight:600">{pe['buque_nombre']}</td></tr>
+          <tr><td style="padding:.6rem 1rem;border-bottom:1px solid #dce4eb;font-size:.85rem;color:#7a8fa0">N° Proyecto (PARCEL)</td>
+              <td style="padding:.6rem 1rem;border-bottom:1px solid #dce4eb;font-size:.85rem;font-weight:600">{pe['viaje'] or '—'}</td></tr>
+          <tr><td style="padding:.6rem 1rem;border-bottom:1px solid #dce4eb;font-size:.85rem;color:#7a8fa0">Producto</td>
+              <td style="padding:.6rem 1rem;border-bottom:1px solid #dce4eb;font-size:.85rem;font-weight:600">{pe['producto'] or '—'}</td></tr>
+          <tr><td style="padding:.6rem 1rem;font-size:.85rem;color:#7a8fa0">Toneladas</td>
+              <td style="padding:.6rem 1rem;font-size:.85rem;font-weight:600">{ton_str}</td></tr>
+        </table>
+        <p style="font-size:.85rem;color:#3a4a58">Se adjunta la solicitud original de Bunge Argentina.</p>
+        <p style="font-size:.85rem;color:#3a4a58">Aguardamos el envío del PE oficializado a la brevedad.</p>
+        <p style="margin-top:1.5rem;font-size:.85rem;color:#3a4a58">Saludos,<br><strong>Agencia Trimar S.A.</strong><br>trimar@trimar.com.ar</p>
+      </div>
+    </div>"""
+    return enviar_email(despachante['email'], asunto, cuerpo,
+                        archivo_path=archivo_path,
+                        archivo_nombre=f"Solicitud_PE_{pe['buque_nombre'].replace(' ','_')}.pdf")
+
+# ── JINJA GLOBALS ──────────────────────────────────────────────────────────────
+app.jinja_env.globals.update(
+    estado_label=estado_label, estado_desc=estado_desc, estado_index=estado_index,
+    horas_en_estado=horas_en_estado, format_fecha=format_fecha,
+    format_fecha_corta=format_fecha_corta, format_ton=format_ton,
+    ESTADOS=ESTADOS, ESTADO_KEYS=ESTADO_KEYS, ACCIONES=ACCIONES,
+    ESPERA_TRIMAR=ESPERA_TRIMAR, ESPERA_DESPACHANTE=ESPERA_DESPACHANTE,
+    ESPERA_BUNGE=ESPERA_BUNGE, ALERTA_HORAS=ALERTA_HORAS,
+    enumerate=enumerate, len=len, abs=abs,
+)
+
+# ── INIT DB ────────────────────────────────────────────────────────────────────
 def init_db():
-    with app.app_context():
-        db = get_db()
-        db.execute(f"""CREATE TABLE IF NOT EXISTS permisos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            {', '.join(f'{f} TEXT' for f in FIELDS_PE)},
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
-        db.execute(f"""CREATE TABLE IF NOT EXISTS solicitudes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            {', '.join(f'{f} TEXT' for f in FIELDS_SOL)},
-            gmail_msg_id TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
-        db.execute(f"""CREATE TABLE IF NOT EXISTS plan_cargas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            {', '.join(f'{f} TEXT' for f in FIELDS_PC)},
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
-        db.commit()
-        count = db.execute("SELECT COUNT(*) FROM permisos").fetchone()[0]
-        if count == 0:
-            seed = [
-                ("26040EC01000700V","13/05/2026","EVER FEAT","LIBERIA","MALASIA","Aceite de Girasol (a granel)","1512.11.10.919G","FCA",264000,264,371712.00,None,1408.00,1288,"26001DJVE001338V","21/04/2026","27/06/2026",1700.16,1384.00),
-                ("26040EC01000719X","15/05/2026","MERCOSUL ITAJAI","BRASIL","MALASIA","Aceite de Girasol (a granel)","1512.11.10.919G","CFR",198000,198,255024.00,4356.00,1288.00,1288,"26001DJVE001392V","24/04/2026","29/06/2026",1275.12,1391.00),
-                ("26040EC01000720A","15/05/2026","MERCOSUL SANTOS","BRASIL","MALASIA","Aceite de Girasol (a granel)","1512.11.10.919G","CFR",198000,198,255024.00,4356.00,1288.00,1288,"26001DJVE001392V","24/04/2026","29/06/2026",1275.12,1391.00),
-                ("26040EC01000744G","20/05/2026","MSC CHLOE","PORTUGAL","JAPÓN","Aceite de Girasol Alto Oleico (a granel)","1512.11.10.911P","CFR",315000,315,393368.85,11721.15,1248.79,1286,"26001DJVE001694D","18/05/2026","04/07/2026",2025.45,1398.00),
-                ("26040EC01000745H","20/05/2026","MSC CHLOE","PORTUGAL","JAPÓN","Aceite de Girasol Alto Oleico (a granel)","1512.11.10.911P","CFR",315000,315,405090.00,11721.15,1286.00,1286,"26001DJVE001694D","18/05/2026","04/07/2026",2025.45,1398.00),
-                ("26040EC01000764X","21/05/2026","CMA CGM RODOLPHE","SINGAPUR","MALASIA","Aceite de Girasol (a granel)","1512.11.10.919G","FCA",264000,264,371712.00,None,1408.00,1288,"26001DJVE001338V","21/04/2026","05/07/2026",1700.16,1397.00),
-            ]
-            ph = ','.join(['?']*len(FIELDS_PE))
-            db.executemany(f"INSERT INTO permisos ({','.join(FIELDS_PE)}) VALUES ({ph})", seed)
-            db.commit()
+    with get_db() as conn:
+        conn.executescript('''
+            CREATE TABLE IF NOT EXISTS buques (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL, viaje TEXT,
+                creado_en TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS despachantes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL, email TEXT, activo INTEGER DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS permisos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                buque_id INTEGER NOT NULL, despachante_id INTEGER,
+                numero_pe TEXT, producto TEXT, numero_oc TEXT,
+                toneladas_solicitadas REAL, toneladas_cargadas REAL,
+                estado TEXT NOT NULL DEFAULT 'SOLICITUD_RECIBIDA',
+                fecha_solicitud TEXT, fecha_ultimo_cambio TEXT,
+                fecha_cumplido TEXT, fecha_fin_carga TEXT,
+                vto_embarque TEXT, fecha_oficializacion TEXT,
+                notas TEXT,
+                archivo_solicitud TEXT, archivo_oficializado TEXT, archivo_cumplido TEXT,
+                facturado INTEGER DEFAULT 0, numero_factura TEXT, fecha_factura TEXT,
+                eliminado INTEGER DEFAULT 0,
+                creado_en TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (buque_id) REFERENCES buques(id),
+                FOREIGN KEY (despachante_id) REFERENCES despachantes(id)
+            );
+            CREATE TABLE IF NOT EXISTS historial (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                permiso_id INTEGER NOT NULL, estado_anterior TEXT,
+                estado_nuevo TEXT NOT NULL, usuario TEXT, notas TEXT,
+                archivo TEXT, fecha TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (permiso_id) REFERENCES permisos(id)
+            );
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL, activo INTEGER DEFAULT 1
+            );
+        ''')
+        # Migraciones para BDs existentes
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(permisos)").fetchall()]
+        migraciones = [
+            ('facturado','INTEGER DEFAULT 0'), ('numero_factura','TEXT'),
+            ('fecha_factura','TEXT'), ('fecha_fin_carga','TEXT'),
+            ('vto_embarque','TEXT'), ('fecha_oficializacion','TEXT'),
+            ('eliminado','INTEGER DEFAULT 0'), ('numero_oc','TEXT'),
+        ]
+        for col, tipo in migraciones:
+            if col not in cols:
+                conn.execute(f"ALTER TABLE permisos ADD COLUMN {col} {tipo}")
 
-# ---------- Excel builder ----------
+        cur = conn.execute('SELECT COUNT(*) FROM usuarios')
+        if cur.fetchone()[0] == 0:
+            for nombre in ['Facundo','Operador 2','Operador 3']:
+                conn.execute("INSERT INTO usuarios (nombre) VALUES (?)", (nombre,))
 
-def _border():
-    t = Side(style="thin")
-    return Border(left=t, right=t, top=t, bottom=t)
+# ── API ENDPOINTS ──────────────────────────────────────────────────────────────
+@app.route('/api/extraer-pdf', methods=['POST'])
+def api_extraer_pdf():
+    if 'archivo' not in request.files:
+        return jsonify({'error': 'Sin archivo'}), 400
+    f = request.files['archivo']
+    tmp_path = os.path.join(UPLOAD_FOLDER, f'tmp_{uuid.uuid4().hex}.pdf')
+    f.save(tmp_path)
+    datos = extraer_datos_pdf(tmp_path)
+    os.remove(tmp_path)
+    return jsonify(datos)
 
-def _hcell(cell, text):
-    cell.value = text
-    cell.font = Font(name="Arial", bold=True, color="FFFFFF", size=10)
-    cell.fill = PatternFill("solid", start_color="1F4E79")
-    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    cell.border = _border()
+@app.route('/api/extraer-pe-oficializado', methods=['POST'])
+def api_extraer_pe_oficializado():
+    if 'archivo' not in request.files:
+        return jsonify({'error': 'Sin archivo'}), 400
+    f = request.files['archivo']
+    tmp_path = os.path.join(UPLOAD_FOLDER, f'tmp_{uuid.uuid4().hex}.pdf')
+    f.save(tmp_path)
+    datos = extraer_datos_pe_oficializado(tmp_path)
+    os.remove(tmp_path)
+    return jsonify(datos)
 
-def build_excel(pe_rows, sol_rows, pc_rows):
-    wb = Workbook()
-    fills = [PatternFill("solid", start_color="DCE6F1"), PatternFill("solid", start_color="FFFFFF")]
-
-    # ---- Hoja PEs ----
-    ws1 = wb.active
-    ws1.title = "Permisos de Exportación"
-    for col, h in enumerate(HEADERS_PE, 1):
-        _hcell(ws1.cell(row=1, column=col), h)
-    ws1.row_dimensions[1].height = 35
-    for r, row in enumerate(pe_rows, 2):
-        for c, f in enumerate(FIELDS_PE, 1):
-            val = row[f]
-            try: val = float(val) if val and '.' in str(val) else (int(val) if val else None)
-            except: pass
-            cell = ws1.cell(row=r, column=c, value=val)
-            cell.font = Font(name="Arial", size=10)
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.border = _border(); cell.fill = fills[r % 2]
-    tr = len(pe_rows)+2
-    for col in range(1, len(HEADERS_PE)+1):
-        cell = ws1.cell(row=tr, column=col)
-        cell.fill = PatternFill("solid", start_color="BDD7EE"); cell.border = _border()
-        cell.font = Font(name="Arial", bold=True, size=10)
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-    ws1.cell(row=tr, column=1).value = "TOTALES"
-    for col in [9,10,11,12,18]:
-        cl = get_column_letter(col)
-        ws1.cell(row=tr, column=col).value = f"=SUM({cl}2:{cl}{tr-1})"
-    for i, w in enumerate([20,18,20,12,14,35,20,14,16,12,16,14,18,20,22,18,16,16,12],1):
-        ws1.column_dimensions[get_column_letter(i)].width = w
-    ws1.freeze_panes = "A2"
-
-    # ---- Hoja Solicitudes ----
-    ws2 = wb.create_sheet("Solicitudes Bunge")
-    HEADERS_SOL_FULL = ["Buque","Bandera","Destino","Producto","Cantidad (Tn)","DJVE","Contrato","Cond. Venta","Precio FOB (USD/Tn)","Importe Total (USD)","Fecha Solicitud","Fecha Vta.","Booking","Estado PE"]
-    for col, h in enumerate(HEADERS_SOL_FULL, 1): _hcell(ws2.cell(row=1, column=col), h)
-    ws2.row_dimensions[1].height = 35
-    pe_djves = set(str(r["djve"] or "").strip() for r in pe_rows)
-    pe_buques = set(str(r["buque"] or "").strip().upper() for r in pe_rows)
-    gf = PatternFill("solid", start_color="C6EFCE")
-    yf = PatternFill("solid", start_color="FFEB9C")
-    for r, row in enumerate(sol_rows, 2):
-        djve = str(row["djve"] or "").strip()
-        buque = str(row["buque"] or "").strip().upper()
-        tiene_pe = djve in pe_djves or buque in pe_buques
-        rf = gf if tiene_pe else yf
-        for c, f in enumerate(FIELDS_SOL, 1):
-            val = row[f]
-            try: val = float(val) if val and '.' in str(val) else (int(val) if val else None)
-            except: pass
-            cell = ws2.cell(row=r, column=c, value=val)
-            cell.font = Font(name="Arial", size=10)
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.border = _border(); cell.fill = rf
-        ec = ws2.cell(row=r, column=len(FIELDS_SOL)+1, value="✅ PE Generado" if tiene_pe else "⏳ Pendiente")
-        ec.font = Font(name="Arial", bold=True, size=10)
-        ec.alignment = Alignment(horizontal="center", vertical="center")
-        ec.border = _border(); ec.fill = rf
-    for i, w in enumerate([20,12,14,25,14,22,14,12,18,18,16,14,16,16],1):
-        ws2.column_dimensions[get_column_letter(i)].width = w
-    ws2.freeze_panes = "A2"
-
-    # ---- Hoja Plan de Cargas ----
-    ws3 = wb.create_sheet("Plan de Cargas")
-    HEADERS_PC_FULL = ["Semana","Buque","Booking","Producto","Consignee","Contenedores","Toneladas","Destino (POD)","ETD","Fecha Carga","Contrato","Envase","Línea","Solicitud","PE"]
-    for col, h in enumerate(HEADERS_PC_FULL, 1): _hcell(ws3.cell(row=1, column=col), h)
-    ws3.row_dimensions[1].height = 35
-    sol_bookings = set(str(r["booking"] or "").strip() for r in sol_rows if r["booking"])
-    sol_buques = set(str(r["buque"] or "").strip().upper() for r in sol_rows)
-    for r, row in enumerate(pc_rows, 2):
-        booking = str(row["booking"] or "").strip()
-        buque = str(row["buque"] or "").strip().upper()
-        tiene_sol = booking in sol_bookings or buque in sol_buques
-        tiene_pe = buque in pe_buques
-        if tiene_pe: rf = gf
-        elif tiene_sol: rf = PatternFill("solid", start_color="DDEBF7")
-        else: rf = yf
-        for c, f in enumerate(FIELDS_PC, 1):
-            cell = ws3.cell(row=r, column=c, value=str(row[f]) if row[f] else None)
-            cell.font = Font(name="Arial", size=10)
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.border = _border(); cell.fill = rf
-        ws3.cell(row=r, column=14, value="✅" if tiene_sol else "—").fill = rf
-        ws3.cell(row=r, column=15, value="✅" if tiene_pe else "—").fill = rf
-        for c in [14, 15]:
-            ws3.cell(row=r, column=c).font = Font(name="Arial", size=10)
-            ws3.cell(row=r, column=c).alignment = Alignment(horizontal="center", vertical="center")
-            ws3.cell(row=r, column=c).border = _border()
-    for i, w in enumerate([14,20,18,30,16,14,12,16,12,12,14,14,14,12,10],1):
-        ws3.column_dimensions[get_column_letter(i)].width = w
-    ws3.freeze_panes = "A2"
-
-    tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
-    wb.save(tmp.name)
-    return tmp.name
-
-# ---------- Claude ----------
-
-def _call_claude(pdf_bytes, prompt):
-    client = anthropic.Anthropic()
-    pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("utf-8")
-    response = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=1000,
-        messages=[{"role": "user", "content": [
-            {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": pdf_b64}},
-            {"type": "text", "text": prompt}
-        ]}]
-    )
-    text = re.sub(r'^```json\s*', '', response.content[0].text.strip())
-    text = re.sub(r'\s*```$', '', text)
-    return json.loads(text)
-
-PE_PROMPT = """Extraé los siguientes campos de este Permiso de Exportación (PE) argentino y devolvé SOLO un JSON válido:
-{"nro_pe":"","fecha_oficializacion":"DD/MM/AAAA","buque":"","bandera":"","pais_destino":"","mercaderia":"","posicion_arancelaria":"","cond_venta":"","peso_bruto_kg":0,"toneladas":0,"fob_total_usd":0.0,"flete_usd":null,"precio_unit_usd_tn":0.0,"precio_oficial_usd_tn":0,"djve":"","fecha_cierre_vta":"DD/MM/AAAA","vto_embarque":"DD/MM/AAAA","ant_gan_usd":0.0,"cotizacion":0.0}
-Solo el JSON, nada más."""
-
-SOL_PROMPT = """Extraé los siguientes campos de esta Solicitud de Permiso de Embarque de Bunge y devolvé SOLO un JSON válido:
-{"buque":"","bandera":"","destino":"","producto":"","cantidad_tn":0.0,"djve":"","contrato":"","cond_venta":"","precio_fob_usd_tn":0.0,"importe_total_usd":0.0,"fecha_solicitud":"DD/MM/AAAA","fecha_vta":"DD/MM/AAAA","booking":null}
-IMPORTANTE: cantidad_tn debe ser en TONELADAS (no kilogramos). Si ves un valor en kg como 198000, convertilo a toneladas: 198.
-Solo el JSON, nada más."""
-
-# ---------- Gmail OAuth ----------
-
-def get_redirect_uri():
-    base = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
-    if base:
-        return f"https://{base}/oauth2callback"
-    return "http://localhost:5000/oauth2callback"
-
-@app.route("/gmail/auth")
-def gmail_auth():
-    client_id = os.environ.get("GOOGLE_CLIENT_ID")
-    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
-    if not client_id or not client_secret:
-        return jsonify({"error": "Faltan GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET"}), 500
-    flow = get_flow(client_id, client_secret, get_redirect_uri())
-    auth_url, state = flow.authorization_url(prompt="consent", access_type="offline")
-    session["oauth_state"] = state
-    return redirect(auth_url)
-
-@app.route("/oauth2callback")
-def oauth2callback():
-    client_id = os.environ.get("GOOGLE_CLIENT_ID")
-    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
-    flow = get_flow(client_id, client_secret, get_redirect_uri())
-    flow.fetch_token(authorization_response=request.url)
-    save_credentials(flow.credentials)
-    return redirect("/?gmail=ok")
-
-@app.route("/gmail/status")
-def gmail_status():
-    creds = get_credentials()
-    return jsonify({"connected": creds is not None})
-
-@app.route("/gmail/disconnect")
-def gmail_disconnect():
-    token_path = os.path.join(DATA_DIR, "gmail_token.json")
-    if os.path.exists(token_path):
-        os.remove(token_path)
-    return jsonify({"ok": True})
-
-# ---------- Gmail fetch ----------
-
-@app.route("/gmail/fetch/<tipo>", methods=["POST"])
-def gmail_fetch(tipo):
-    service = get_gmail_service()
-    if not service:
-        return jsonify({"error": "Gmail no conectado"}), 401
-    if tipo == "pe":
-        query_senders = [f"@{PE_SENDER_DOMAIN}"]
-    else:
-        query_senders = BUNGE_SENDERS
-    query = f"from:({'  OR '.join(query_senders)}) has:attachment filename:pdf is:unread"
-    results = service.users().messages().list(userId="me", q=query, maxResults=20).execute()
-    messages = results.get("messages", [])
-    if not messages:
-        return jsonify({"found": 0, "processed": [], "skipped": []})
+@app.route('/api/usuarios')
+def api_usuarios():
     db = get_db()
-    processed = []
-    skipped = []
-    for msg in messages:
-        msg_id = msg["id"]
-        sender, subject, date = get_message_sender(service, msg_id)
-        attachments = get_pdf_attachments_from_message(service, msg_id)
-        for filename, pdf_bytes in attachments:
-            try:
-                if tipo == "pe":
-                    data = _call_claude(pdf_bytes, PE_PROMPT)
-                    nro = data.get("nro_pe", "")
-                    exists = db.execute("SELECT 1 FROM permisos WHERE nro_pe=?", (nro,)).fetchone()
-                    if exists:
-                        skipped.append({"filename": filename, "reason": f"PE {nro} ya existe"})
-                        continue
-                    ph = ','.join(['?']*len(FIELDS_PE))
-                    vals = [str(data.get(f,'')) if data.get(f) is not None else None for f in FIELDS_PE]
-                    db.execute(f"INSERT INTO permisos ({','.join(FIELDS_PE)}) VALUES ({ph})", vals)
-                    db.commit()
-                    processed.append({"filename": filename, "id": nro, "sender": sender, "subject": subject})
-                else:
-                    data = _call_claude(pdf_bytes, SOL_PROMPT)
-                    exists = db.execute("SELECT 1 FROM solicitudes WHERE gmail_msg_id=?", (msg_id,)).fetchone()
-                    if exists:
-                        skipped.append({"filename": filename, "reason": "Ya procesado"})
-                        continue
-                    ph = ','.join(['?']*(len(FIELDS_SOL)+1))
-                    vals = [str(data.get(f,'')) if data.get(f) is not None else None for f in FIELDS_SOL]
-                    vals.append(msg_id)
-                    db.execute(f"INSERT INTO solicitudes ({','.join(FIELDS_SOL)}, gmail_msg_id) VALUES ({ph})", vals)
-                    db.commit()
-                    processed.append({"filename": filename, "id": data.get("buque",""), "sender": sender, "subject": subject})
-                mark_as_read(service, msg_id)
-            except Exception as e:
-                skipped.append({"filename": filename, "reason": str(e)})
-    return jsonify({"found": len(messages), "processed": processed, "skipped": skipped})
+    lista = [dict(u) for u in db.execute('SELECT id, nombre FROM usuarios WHERE activo=1 ORDER BY nombre').fetchall()]
+    return jsonify(lista)
 
-# ---------- Routes PEs ----------
-
-@app.route("/")
+# ── RUTAS PRINCIPALES ──────────────────────────────────────────────────────────
+@app.route('/')
 def index():
-    return render_template("index.html")
-
-@app.route("/upload", methods=["POST"])
-def upload():
-    if "pdf" not in request.files:
-        return jsonify({"error": "No se recibió archivo"}), 400
-    pdf_bytes = request.files["pdf"].read()
-    try:
-        data = _call_claude(pdf_bytes, PE_PROMPT)
-    except Exception as e:
-        return jsonify({"error": f"Error extrayendo datos: {str(e)}"}), 500
     db = get_db()
-    exists = db.execute("SELECT 1 FROM permisos WHERE nro_pe=?", (data.get("nro_pe",""),)).fetchone()
-    data["already_exists"] = exists is not None
-    djve = str(data.get("djve") or "").strip()
-    toneladas = str(data.get("toneladas") or "").strip()
-    sol = None
-    if djve and toneladas:
-        sol = db.execute("SELECT booking, buque, fecha_solicitud FROM solicitudes WHERE djve=? AND ROUND(CAST(cantidad_tn AS REAL))=ROUND(CAST(? AS REAL))", (djve, toneladas)).fetchone()
-    if not sol and djve:
-        sol = db.execute("SELECT booking, buque, fecha_solicitud FROM solicitudes WHERE djve=?", (djve,)).fetchone()
-    data["solicitud_match"] = dict(sol) if sol else None
-    return jsonify(data)
+    filtro   = request.args.get('estado', '')
+    busqueda = request.args.get('q', '').strip()
+    desp_f   = request.args.get('despachante', '')
+    fecha_d  = request.args.get('fecha_desde', '')
+    fecha_h  = request.args.get('fecha_hasta', '')
 
-@app.route("/confirm", methods=["POST"])
-def confirm():
-    pe = request.json
-    nro = pe.get("nro_pe", "")
+    query = '''
+        SELECT p.*, b.nombre as buque_nombre, b.viaje,
+               d.nombre as despachante_nombre
+        FROM permisos p
+        JOIN buques b ON p.buque_id = b.id
+        LEFT JOIN despachantes d ON p.despachante_id = d.id
+        WHERE 1=1
+    '''
+    params = []
+    if filtro == 'ELIMINADO':
+        query += ' AND p.eliminado = 1'
+    elif filtro:
+        query += ' AND p.estado = ? AND p.eliminado = 0'; params.append(filtro)
+    else:
+        query += ' AND p.eliminado = 0'
+
+    if busqueda:
+        query += ' AND (b.nombre LIKE ? OR p.numero_pe LIKE ? OR p.producto LIKE ? OR b.viaje LIKE ? OR p.numero_oc LIKE ?)'
+        params += [f'%{busqueda}%']*5
+    if desp_f:
+        query += ' AND p.despachante_id = ?'; params.append(desp_f)
+    if fecha_d:
+        query += ' AND DATE(p.creado_en) >= ?'; params.append(fecha_d)
+    if fecha_h:
+        query += ' AND DATE(p.creado_en) <= ?'; params.append(fecha_h)
+    query += ' ORDER BY p.id DESC'
+    permisos = db.execute(query, params).fetchall()
+
+    contadores = {}
+    for key, _, _ in ESTADOS:
+        contadores[key] = db.execute('SELECT COUNT(*) FROM permisos WHERE estado=? AND eliminado=0',(key,)).fetchone()[0]
+    contadores['ELIMINADO'] = db.execute('SELECT COUNT(*) FROM permisos WHERE eliminado=1').fetchone()[0]
+
+    total   = db.execute('SELECT COUNT(*) FROM permisos WHERE eliminado=0').fetchone()[0]
+    activos = db.execute("SELECT COUNT(*) FROM permisos WHERE estado != 'CUMPLIDO_ENVIADO' AND eliminado=0").fetchone()[0]
+    alertas = 0
+    for p in db.execute("SELECT fecha_ultimo_cambio,creado_en,estado FROM permisos WHERE estado != 'CUMPLIDO_ENVIADO' AND eliminado=0").fetchall():
+        ref = p['fecha_ultimo_cambio'] or p['creado_en'] or ''
+        if ref and horas_en_estado(ref) > ALERTA_HORAS:
+            alertas += 1
+
+    pend_facturar   = db.execute("SELECT COUNT(*) FROM permisos WHERE facturado=0 AND estado IN ('CUMPLIDO_PENDIENTE','CUMPLIDO_ENVIADO') AND eliminado=0").fetchone()[0]
+    por_trimar      = sum(contadores.get(e,0) for e in ESPERA_TRIMAR)
+    por_despachante = sum(contadores.get(e,0) for e in ESPERA_DESPACHANTE)
+    por_bunge       = sum(contadores.get(e,0) for e in ESPERA_BUNGE)
+
+    despachantes = db.execute('SELECT * FROM despachantes WHERE activo=1 ORDER BY nombre').fetchall()
+    usuarios     = db.execute('SELECT * FROM usuarios WHERE activo=1').fetchall()
+
+    return render_template('index.html',
+        permisos=permisos, contadores=contadores,
+        filtro=filtro, busqueda=busqueda, desp_f=desp_f,
+        fecha_d=fecha_d, fecha_h=fecha_h,
+        total=total, activos=activos, alertas=alertas,
+        pend_facturar=pend_facturar,
+        por_trimar=por_trimar, por_despachante=por_despachante, por_bunge=por_bunge,
+        despachantes=despachantes, usuarios=usuarios,
+    )
+
+@app.route('/nuevo', methods=['GET','POST'])
+def nuevo_pe():
     db = get_db()
-    if db.execute("SELECT 1 FROM permisos WHERE nro_pe=?", (nro,)).fetchone():
-        return jsonify({"error": f"El PE {nro} ya existe"}), 409
-    pe.pop("already_exists", None)
-    pe.pop("solicitud_match", None)
-    ph = ','.join(['?']*len(FIELDS_PE))
-    vals = [str(pe.get(f,'')) if pe.get(f) is not None else None for f in FIELDS_PE]
-    db.execute(f"INSERT INTO permisos ({','.join(FIELDS_PE)}) VALUES ({ph})", vals)
+    if request.method == 'POST':
+        buque_nombre = request.form['buque_nombre'].strip()
+        parcel       = request.form.get('viaje','').strip()
+        producto     = request.form.get('producto','').strip()
+        toneladas    = request.form.get('toneladas_solicitadas','') or None
+        numero_oc    = request.form.get('numero_oc','').strip()
+        notas        = request.form.get('notas','').strip()
+        usuario      = request.form.get('usuario','Sistema')
+        ahora        = datetime.now().isoformat()
+
+        # Validar duplicado PARCEL
+        if parcel:
+            dup = db.execute('''
+                SELECT p.id FROM permisos p JOIN buques b ON p.buque_id=b.id
+                WHERE b.viaje=? AND p.eliminado=0
+            ''', (parcel,)).fetchone()
+            if dup:
+                flash(f'Ya existe un PE con el N° de Proyecto "{parcel}" (PE #{dup["id"]}). Verificá antes de continuar.', 'danger')
+                return redirect(request.url)
+
+        archivo_sol = None
+        if 'archivo_solicitud' in request.files:
+            f = request.files['archivo_solicitud']
+            nombre, err = save_upload(f)
+            if err:
+                flash(err, 'danger')
+                return redirect(request.url)
+            archivo_sol = nombre
+
+        row = db.execute('SELECT id FROM buques WHERE nombre=? AND viaje=?',(buque_nombre,parcel)).fetchone()
+        buque_id = row['id'] if row else db.execute(
+            'INSERT INTO buques (nombre,viaje) VALUES (?,?)',(buque_nombre,parcel)
+        ).lastrowid
+
+        cur = db.execute('''
+            INSERT INTO permisos
+              (buque_id,producto,toneladas_solicitadas,numero_oc,notas,estado,
+               fecha_solicitud,fecha_ultimo_cambio,archivo_solicitud)
+            VALUES (?,?,?,?,?,'SOLICITUD_RECIBIDA',?,?,?)
+        ''',(buque_id,producto,toneladas,numero_oc,notas,ahora,ahora,archivo_sol))
+        permiso_id = cur.lastrowid
+
+        registrar_historial(db, permiso_id, None, 'SOLICITUD_RECIBIDA', usuario,
+                            'PE creado' + (' — solicitud adjunta' if archivo_sol else ''),
+                            archivo_sol)
+        db.commit()
+        flash('Permiso de Embarque creado.', 'success')
+        return redirect(url_for('detalle_pe', pe_id=permiso_id))
+
+    usuarios = db.execute('SELECT * FROM usuarios WHERE activo=1').fetchall()
+    return render_template('nuevo.html', usuarios=usuarios)
+
+@app.route('/pe/<int:pe_id>')
+def detalle_pe(pe_id):
+    db  = get_db()
+    pe  = db.execute('''
+        SELECT p.*, b.nombre as buque_nombre, b.viaje,
+               d.nombre as despachante_nombre, d.email as despachante_email
+        FROM permisos p
+        JOIN buques b ON p.buque_id=b.id
+        LEFT JOIN despachantes d ON p.despachante_id=d.id
+        WHERE p.id=?
+    ''', (pe_id,)).fetchone()
+    if not pe:
+        flash('PE no encontrado.','danger')
+        return redirect(url_for('index'))
+    historial    = db.execute('SELECT * FROM historial WHERE permiso_id=? ORDER BY fecha DESC',(pe_id,)).fetchall()
+    despachantes = db.execute('SELECT * FROM despachantes WHERE activo=1').fetchall()
+    usuarios     = db.execute('SELECT * FROM usuarios WHERE activo=1').fetchall()
+    return render_template('detalle.html', pe=pe, historial=historial,
+                           despachantes=despachantes, usuarios=usuarios)
+
+@app.route('/pe/<int:pe_id>/avanzar', methods=['POST'])
+def avanzar_estado(pe_id):
+    db = get_db()
+    pe = db.execute('''
+        SELECT p.*, b.nombre as buque_nombre, b.viaje,
+               d.nombre as despachante_nombre, d.email as despachante_email
+        FROM permisos p JOIN buques b ON p.buque_id=b.id
+        LEFT JOIN despachantes d ON p.despachante_id=d.id
+        WHERE p.id=?
+    ''',(pe_id,)).fetchone()
+    if not pe: abort(404)
+
+    if pe['eliminado']:
+        flash('No se puede operar sobre un PE eliminado.','danger')
+        return redirect(url_for('detalle_pe', pe_id=pe_id))
+
+    estado_actual = pe['estado']
+    accion = ACCIONES.get(estado_actual)
+    if not accion or not accion[1]:
+        flash('Este PE ya está en el estado final.','warning')
+        return redirect(url_for('detalle_pe', pe_id=pe_id))
+
+    nuevo_estado     = accion[1]
+    usuario          = request.form.get('usuario','Sistema')
+    notas            = request.form.get('notas','').strip()
+    ahora            = datetime.now().isoformat()
+    updates          = {'estado': nuevo_estado, 'fecha_ultimo_cambio': ahora}
+    archivo_guardado = None
+
+    if nuevo_estado == 'ENVIADO_DESPACHANTE':
+        desp_id = request.form.get('despachante_id')
+        if desp_id:
+            updates['despachante_id'] = desp_id
+            desp = db.execute('SELECT * FROM despachantes WHERE id=?',(desp_id,)).fetchone()
+            if desp and desp['email']:
+                archivo_path = os.path.join(UPLOAD_FOLDER, pe['archivo_solicitud']) if pe['archivo_solicitud'] else None
+                pe_dict = dict(pe); pe_dict['despachante_nombre'] = desp['nombre']
+                ok, err = mail_despachante(pe_dict, desp, archivo_path)
+                if ok: flash('✉ Mail enviado al despachante.','info')
+                else:  flash(f'Advertencia: no se pudo enviar el mail ({err}).','warning')
+
+    if nuevo_estado == 'OFICIALIZADO_RECIBIDO':
+        numero_pe            = request.form.get('numero_pe','').strip()
+        vto_embarque         = request.form.get('vto_embarque','').strip()
+        fecha_oficializacion = request.form.get('fecha_oficializacion','').strip()
+        if numero_pe:
+            if not validar_numero_pe(numero_pe):
+                flash('Formato de N° PE inválido. Debe ser: (2 dígitos año)(3 dígitos aduana)(EC01 o EC02)(6 dígitos)(letra). Ej: 26040EC01000961H','warning')
+            updates['numero_pe'] = numero_pe
+        if vto_embarque:         updates['vto_embarque'] = vto_embarque
+        if fecha_oficializacion: updates['fecha_oficializacion'] = fecha_oficializacion
+        if 'archivo' in request.files:
+            nombre, err = save_upload(request.files['archivo'])
+            if err: flash(err,'danger'); return redirect(url_for('detalle_pe', pe_id=pe_id))
+            if nombre: updates['archivo_oficializado'] = nombre; archivo_guardado = nombre
+
+    if nuevo_estado == 'CUMPLIDO_PENDIENTE':
+        fecha_fin = request.form.get('fecha_fin_carga','').strip()
+        ton_carg  = request.form.get('toneladas_cargadas','').strip()
+        if not fecha_fin or not ton_carg:
+            flash('La fecha/hora de finalización y las toneladas cargadas son obligatorias.','danger')
+            return redirect(url_for('detalle_pe', pe_id=pe_id))
+        updates['fecha_fin_carga']    = fecha_fin
+        updates['toneladas_cargadas'] = ton_carg
+
+    if nuevo_estado == 'CUMPLIDO_ENVIADO':
+        updates['fecha_cumplido'] = ahora
+        if 'archivo' in request.files:
+            nombre, err = save_upload(request.files['archivo'])
+            if err: flash(err,'danger'); return redirect(url_for('detalle_pe', pe_id=pe_id))
+            if nombre: updates['archivo_cumplido'] = nombre; archivo_guardado = nombre
+
+    set_clause = ', '.join(f'{k}=?' for k in updates)
+    db.execute(f'UPDATE permisos SET {set_clause} WHERE id=?', list(updates.values())+[pe_id])
+    registrar_historial(db, pe_id, estado_actual, nuevo_estado, usuario, notas or None, archivo_guardado)
     db.commit()
-    return jsonify({"ok": True, "nro_pe": nro})
+    flash(f'Estado actualizado: {estado_label(nuevo_estado)}','success')
+    return redirect(url_for('detalle_pe', pe_id=pe_id))
 
-@app.route("/list")
-def list_pes():
+@app.route('/pe/<int:pe_id>/editar', methods=['POST'])
+def editar_pe(pe_id):
     db = get_db()
-    rows = db.execute("SELECT nro_pe, buque, pais_destino, fecha_oficializacion, djve, toneladas FROM permisos ORDER BY fecha_oficializacion DESC, nro_pe DESC").fetchall()
-    result = []
-    for row in rows:
-        d = dict(row)
-        djve = str(d.get("djve") or "").strip()
-        toneladas = str(d.get("toneladas") or "").strip()
-        sol = None
-        if djve and toneladas:
-            sol = db.execute("SELECT booking FROM solicitudes WHERE djve=? AND ROUND(CAST(cantidad_tn AS REAL))=ROUND(CAST(? AS REAL))", (djve, toneladas)).fetchone()
-        if not sol and djve:
-            sol = db.execute("SELECT booking FROM solicitudes WHERE djve=?", (djve,)).fetchone()
-        d["booking"] = sol["booking"] if sol and sol["booking"] else None
-        result.append(d)
-    return jsonify(result)
-
-@app.route("/pe/delete/<nro>", methods=["DELETE"])
-def pe_delete(nro):
-    db = get_db()
-    db.execute("DELETE FROM permisos WHERE nro_pe=?", (nro,))
+    db.execute('''UPDATE permisos SET numero_pe=?,producto=?,toneladas_solicitadas=?,numero_oc=?,notas=? WHERE id=?''',
+        (request.form.get('numero_pe','').strip(),
+         request.form.get('producto','').strip(),
+         request.form.get('toneladas_solicitadas','') or None,
+         request.form.get('numero_oc','').strip(),
+         request.form.get('notas','').strip(), pe_id))
     db.commit()
-    return jsonify({"ok": True})
+    flash('Datos actualizados.','success')
+    return redirect(url_for('detalle_pe', pe_id=pe_id))
 
-# ---------- Routes Solicitudes ----------
-
-@app.route("/solicitud/upload", methods=["POST"])
-def solicitud_upload():
-    if "pdf" not in request.files:
-        return jsonify({"error": "No se recibió archivo"}), 400
-    pdf_bytes = request.files["pdf"].read()
-    try:
-        data = _call_claude(pdf_bytes, SOL_PROMPT)
-    except Exception as e:
-        return jsonify({"error": f"Error extrayendo datos: {str(e)}"}), 500
+@app.route('/pe/<int:pe_id>/facturar', methods=['POST'])
+def facturar_pe(pe_id):
     db = get_db()
-    djve = data.get("djve","")
-    buque = (data.get("buque") or "").upper()
-    tiene_pe = bool(djve and db.execute("SELECT 1 FROM permisos WHERE djve=?", (djve,)).fetchone())
-    if not tiene_pe and buque:
-        tiene_pe = bool(db.execute("SELECT 1 FROM permisos WHERE UPPER(buque)=?", (buque,)).fetchone())
-    data["tiene_pe"] = tiene_pe
-    return jsonify(data)
-
-@app.route("/solicitud/confirm", methods=["POST"])
-def solicitud_confirm():
-    sol = request.json
-    sol.pop("tiene_pe", None)
-    db = get_db()
-    ph = ','.join(['?']*len(FIELDS_SOL))
-    vals = [str(sol.get(f,'')) if sol.get(f) is not None else None for f in FIELDS_SOL]
-    db.execute(f"INSERT INTO solicitudes ({','.join(FIELDS_SOL)}) VALUES ({ph})", vals)
+    pe = db.execute('SELECT * FROM permisos WHERE id=?',(pe_id,)).fetchone()
+    if not pe: abort(404)
+    numero_factura = request.form.get('numero_factura','').strip()
+    fecha_factura  = request.form.get('fecha_factura','').strip()
+    usuario        = request.form.get('usuario','Sistema')
+    if not numero_factura or not fecha_factura:
+        flash('El número y la fecha de factura son obligatorios.','danger')
+        return redirect(url_for('detalle_pe', pe_id=pe_id))
+    db.execute('UPDATE permisos SET facturado=1, numero_factura=?, fecha_factura=? WHERE id=?',
+               (numero_factura, fecha_factura, pe_id))
+    registrar_historial(db, pe_id, pe['estado'], pe['estado'], usuario,
+                        f'Facturado — N° {numero_factura} del {fecha_factura}')
     db.commit()
-    return jsonify({"ok": True})
+    flash(f'Factura N° {numero_factura} registrada.','success')
+    return redirect(url_for('detalle_pe', pe_id=pe_id))
 
-@app.route("/solicitud/list")
-def list_solicitudes():
+@app.route('/pe/<int:pe_id>/eliminar', methods=['POST'])
+def eliminar_pe(pe_id):
     db = get_db()
-    rows = db.execute(f"SELECT {','.join(FIELDS_SOL)}, id FROM solicitudes ORDER BY fecha_solicitud DESC, id DESC").fetchall()
-    pe_djves = set(str(r[0] or "").strip() for r in db.execute("SELECT djve FROM permisos WHERE djve IS NOT NULL").fetchall())
-    pe_buques = set(str(r[0] or "").upper() for r in db.execute("SELECT buque FROM permisos WHERE buque IS NOT NULL").fetchall())
-    result = []
-    for row in rows:
-        d = dict(row)
-        djve_sol = str(d.get("djve") or "").strip()
-        cant_sol = str(d.get("cantidad_tn") or "").strip()
-        tiene_pe = False
-        if djve_sol and cant_sol:
-            tiene_pe = bool(db.execute("SELECT 1 FROM permisos WHERE djve=? AND ROUND(CAST(toneladas AS REAL))=ROUND(CAST(? AS REAL))", (djve_sol, cant_sol)).fetchone())
-        d["tiene_pe"] = tiene_pe
-        result.append(d)
-    return jsonify(result)
+    confirmacion = request.form.get('confirmacion','').strip().lower()
+    if confirmacion != 'borrar':
+        flash('Confirmación incorrecta. Escribí "borrar" para eliminar.','danger')
+        return redirect(url_for('detalle_pe', pe_id=pe_id))
+    pe = db.execute('SELECT * FROM permisos WHERE id=?',(pe_id,)).fetchone()
+    if not pe: abort(404)
 
-@app.route("/solicitud/delete/<int:sol_id>", methods=["DELETE"])
-def solicitud_delete(sol_id):
-    db = get_db()
-    db.execute("DELETE FROM solicitudes WHERE id=?", (sol_id,))
+    # Eliminar archivos
+    for campo in ('archivo_solicitud','archivo_oficializado','archivo_cumplido'):
+        if pe[campo]:
+            try: os.remove(os.path.join(UPLOAD_FOLDER, pe[campo]))
+            except: pass
+
+    # Marcar como eliminado en lugar de borrar
+    db.execute("UPDATE permisos SET eliminado=1, estado='ELIMINADO' WHERE id=?", (pe_id,))
+    registrar_historial(db, pe_id, pe['estado'], 'ELIMINADO', 
+                        request.form.get('usuario','Sistema'), 'PE eliminado')
     db.commit()
-    return jsonify({"ok": True})
+    flash(f'PE #{pe_id} marcado como eliminado.','success')
+    return redirect(url_for('index'))
 
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
-@app.route("/dashboard")
-def dashboard():
+# ── DESPACHANTES ───────────────────────────────────────────────────────────────
+@app.route('/despachantes')
+def despachantes():
     db = get_db()
-    from datetime import datetime, timedelta
+    lista = db.execute('SELECT * FROM despachantes ORDER BY nombre').fetchall()
+    return render_template('despachantes.html', despachantes=lista)
 
-    total_pes = db.execute("SELECT COUNT(*) FROM permisos").fetchone()[0]
-    total_sol = db.execute("SELECT COUNT(*) FROM solicitudes").fetchone()[0]
-    total_plan = db.execute("SELECT COUNT(*) FROM plan_cargas").fetchone()[0]
-
-    # Solicitudes sin PE
-    sol_rows = db.execute(f"SELECT {','.join(FIELDS_SOL)} FROM solicitudes").fetchall()
-    pe_djves = set(str(r[0] or "").strip() for r in db.execute("SELECT djve FROM permisos WHERE djve IS NOT NULL").fetchall())
-    sol_sin_pe = 0
-    for row in sol_rows:
-        djve_sol = str(row["djve"] or "").strip()
-        cant_sol = str(row["cantidad_tn"] or "").strip()
-        tiene_pe = False
-        if djve_sol and cant_sol:
-            tiene_pe = bool(db.execute("SELECT 1 FROM permisos WHERE djve=? AND ROUND(CAST(toneladas AS REAL))=ROUND(CAST(? AS REAL))", (djve_sol, cant_sol)).fetchone())
-        if not tiene_pe and djve_sol:
-            tiene_pe = djve_sol in pe_djves
-        if not tiene_pe:
-            sol_sin_pe += 1
-
-    # PEs por vencer en 7 días o vencidos
-    today = datetime.today()
-    pes_vencer = []
-    for row in db.execute("SELECT nro_pe, buque, vto_embarque, pais_destino FROM permisos WHERE vto_embarque IS NOT NULL").fetchall():
-        vto = row["vto_embarque"]
-        if not vto:
-            continue
-        try:
-            d = datetime.strptime(vto, "%d/%m/%Y")
-            diff = (d - today).days
-            if diff <= 7:
-                pes_vencer.append({
-                    "nro_pe": row["nro_pe"],
-                    "buque": row["buque"],
-                    "vto_embarque": vto,
-                    "pais_destino": row["pais_destino"],
-                    "dias": diff
-                })
-        except:
-            pass
-    pes_vencer.sort(key=lambda x: x["dias"])
-
-    # Últimos 5 PEs
-    ultimos_pes = [dict(r) for r in db.execute("SELECT nro_pe, buque, fecha_oficializacion, pais_destino FROM permisos ORDER BY fecha_oficializacion DESC, nro_pe DESC LIMIT 5").fetchall()]
-
-    # Últimas 5 solicitudes
-    ultimas_sol = [dict(r) for r in db.execute("SELECT buque, producto, cantidad_tn, djve, fecha_solicitud FROM solicitudes ORDER BY id DESC LIMIT 5").fetchall()]
-
-    return jsonify({
-        "total_pes": total_pes,
-        "total_sol": total_sol,
-        "total_plan": total_plan,
-        "sol_sin_pe": sol_sin_pe,
-        "pes_vencer": pes_vencer,
-        "ultimos_pes": ultimos_pes,
-        "ultimas_sol": ultimas_sol
-    })
-
-
-@app.route("/search")
-def search():
-    q = request.args.get("q", "").strip()
-    if not q or len(q) < 2:
-        return jsonify({"pes": [], "solicitudes": [], "plan": []})
+@app.route('/despachantes/nuevo', methods=['POST'])
+def nuevo_despachante():
     db = get_db()
-    like = f"%{q.upper()}%"
-
-    pes = [dict(r) for r in db.execute(f"""
-        SELECT {','.join(FIELDS_PE)} FROM permisos
-        WHERE UPPER(nro_pe) LIKE ? OR UPPER(buque) LIKE ? OR UPPER(djve) LIKE ?
-        OR UPPER(pais_destino) LIKE ?
-        ORDER BY fecha_oficializacion DESC LIMIT 20
-    """, (like, like, like, like)).fetchall()]
-
-    solicitudes = [dict(r) for r in db.execute(f"""
-        SELECT {','.join(FIELDS_SOL)}, id FROM solicitudes
-        WHERE UPPER(buque) LIKE ? OR UPPER(booking) LIKE ? OR UPPER(djve) LIKE ?
-        OR UPPER(destino) LIKE ?
-        ORDER BY fecha_solicitud DESC LIMIT 20
-    """, (like, like, like, like)).fetchall()]
-
-    plan = [dict(r) for r in db.execute(f"""
-        SELECT {','.join(FIELDS_PC)}, id FROM plan_cargas
-        WHERE UPPER(buque) LIKE ? OR UPPER(booking) LIKE ? OR UPPER(pod) LIKE ?
-        ORDER BY etd DESC LIMIT 20
-    """, (like, like, like)).fetchall()]
-
-    return jsonify({"pes": pes, "solicitudes": solicitudes, "plan": plan})
-
-# ---------- Routes Plan de Cargas ----------
-
-@app.route("/plan/upload", methods=["POST"])
-def plan_upload():
-    if "excel" not in request.files:
-        return jsonify({"error": "No se recibió archivo"}), 400
-    file_bytes = request.files["excel"].read()
-    try:
-        rows = parse_plan_cargas(file_bytes)
-    except Exception as e:
-        return jsonify({"error": f"Error procesando Excel: {str(e)}"}), 500
-    if not rows:
-        return jsonify({"error": "No se encontraron datos en el archivo"}), 400
-    return jsonify({"rows": rows, "count": len(rows)})
-
-@app.route("/plan/confirm", methods=["POST"])
-def plan_confirm():
-    rows = request.json.get("rows", [])
-    db = get_db()
-    ph = ','.join(['?']*len(FIELDS_PC))
-    inserted = 0
-    skipped = 0
-    for row in rows:
-        # Check duplicate by booking + consignee + fecha_carga combination
-        booking = row.get("booking")
-        consignee = row.get("consignee")
-        contrato = row.get("contrato")
-        fecha_carga = row.get("fecha_carga")
-        if booking and consignee and contrato:
-            exists = db.execute(
-                "SELECT 1 FROM plan_cargas WHERE booking=? AND consignee=? AND contrato=?",
-                (booking, consignee, contrato)
-            ).fetchone()
-            if exists:
-                skipped += 1
-                continue
-        elif booking and consignee and fecha_carga:
-            exists = db.execute(
-                "SELECT 1 FROM plan_cargas WHERE booking=? AND consignee=? AND fecha_carga=?",
-                (booking, consignee, fecha_carga)
-            ).fetchone()
-            if exists:
-                skipped += 1
-                continue
-        vals = [str(row.get(f,'')) if row.get(f) is not None else None for f in FIELDS_PC]
-        db.execute(f"INSERT INTO plan_cargas ({','.join(FIELDS_PC)}) VALUES ({ph})", vals)
-        inserted += 1
+    nombre = request.form['nombre'].strip()
+    email  = request.form.get('email','').strip()
+    db.execute('INSERT INTO despachantes (nombre,email) VALUES (?,?)',(nombre,email))
     db.commit()
-    return jsonify({"ok": True, "inserted": inserted, "skipped": skipped})
+    flash(f'Despachante {nombre} agregado.','success')
+    return redirect(url_for('despachantes'))
 
-@app.route("/plan/list")
-def plan_list():
+@app.route('/despachantes/<int:d_id>/toggle', methods=['POST'])
+def toggle_despachante(d_id):
     db = get_db()
-    rows = db.execute(f"SELECT {','.join(FIELDS_PC)}, id FROM plan_cargas ORDER BY etd DESC, id DESC").fetchall()
-    sol_bookings = set(str(r[0] or "").strip() for r in db.execute("SELECT booking FROM solicitudes WHERE booking IS NOT NULL").fetchall())
-    sol_buques = set(str(r[0] or "").strip().upper() for r in db.execute("SELECT buque FROM solicitudes WHERE buque IS NOT NULL").fetchall())
-    pe_buques = set(str(r[0] or "").strip().upper() for r in db.execute("SELECT buque FROM permisos WHERE buque IS NOT NULL").fetchall())
-    def fuzzy_match(name, name_set):
-        if not name:
-            return False
-        if name in name_set:
-            return True
-        for s in name_set:
-            if s and (s in name or name in s):
-                return True
-        return False
-
-    # Build booking → tiene_pe map from solicitudes
-    sol_rows_full = db.execute("SELECT booking, djve, cantidad_tn FROM solicitudes WHERE booking IS NOT NULL").fetchall()
-    booking_tiene_pe = {}
-    for sol in sol_rows_full:
-        bk = str(sol["booking"] or "").strip()
-        if not bk:
-            continue
-        djve = str(sol["djve"] or "").strip()
-        cant = str(sol["cantidad_tn"] or "").strip()
-        tiene_pe = False
-        if djve and cant:
-            tiene_pe = bool(db.execute(
-                "SELECT 1 FROM permisos WHERE djve=? AND ROUND(CAST(toneladas AS REAL))=ROUND(CAST(? AS REAL))",
-                (djve, cant)).fetchone())
-        if not tiene_pe and djve:
-            tiene_pe = bool(db.execute("SELECT 1 FROM permisos WHERE djve=?", (djve,)).fetchone())
-        booking_tiene_pe[bk] = tiene_pe
-
-    result = []
-    for row in rows:
-        d = dict(row)
-        booking = str(d.get("booking") or "").strip()
-        buque = str(d.get("buque") or "").strip().upper()
-        # Primary: booking → solicitud → PE chain
-        if booking and booking in booking_tiene_pe:
-            d["tiene_solicitud"] = True
-            d["tiene_pe"] = booking_tiene_pe[booking]
-        else:
-            d["tiene_solicitud"] = booking in sol_bookings or fuzzy_match(buque, sol_buques)
-            d["tiene_pe"] = fuzzy_match(buque, pe_buques)
-        result.append(d)
-    return jsonify(result)
-
-@app.route("/plan/delete/<int:row_id>", methods=["DELETE"])
-def plan_delete(row_id):
-    db = get_db()
-    db.execute("DELETE FROM plan_cargas WHERE id=?", (row_id,))
+    db.execute('UPDATE despachantes SET activo=1-activo WHERE id=?',(d_id,))
     db.commit()
-    return jsonify({"ok": True})
+    return redirect(url_for('despachantes'))
 
-
-@app.route("/admin/fix_cantidades")
-def fix_cantidades():
-    """Fix cantidad_tn values that were stored in kg instead of tonnes."""
+# ── USUARIOS ───────────────────────────────────────────────────────────────────
+@app.route('/usuarios')
+def usuarios():
     db = get_db()
-    rows = db.execute("SELECT id, cantidad_tn FROM solicitudes").fetchall()
-    fixed = 0
-    for row in rows:
-        val = row["cantidad_tn"]
-        if val:
-            try:
-                f = float(val)
-                if f > 1000:  # Likely in kg
-                    new_val = round(f / 1000, 3)
-                    db.execute("UPDATE solicitudes SET cantidad_tn=? WHERE id=?", (str(new_val), row["id"]))
-                    fixed += 1
-            except:
-                pass
+    lista = db.execute('SELECT * FROM usuarios ORDER BY nombre').fetchall()
+    return render_template('usuarios.html', usuarios=lista)
+
+@app.route('/usuarios/nuevo', methods=['POST'])
+def nuevo_usuario():
+    db = get_db()
+    nombre = request.form['nombre'].strip()
+    db.execute('INSERT INTO usuarios (nombre) VALUES (?)',(nombre,))
     db.commit()
-    return jsonify({"ok": True, "fixed": fixed})
+    flash(f'Usuario {nombre} agregado.','success')
+    return redirect(url_for('usuarios'))
 
-# ---------- Download ----------
-
-@app.route("/download")
-def download():
-    db = get_db()
-    pe_rows = db.execute(f"SELECT {','.join(FIELDS_PE)} FROM permisos ORDER BY fecha_oficializacion, nro_pe").fetchall()
-    sol_rows = db.execute(f"SELECT {','.join(FIELDS_SOL)} FROM solicitudes ORDER BY fecha_solicitud DESC").fetchall()
-    pc_rows = db.execute(f"SELECT {','.join(FIELDS_PC)} FROM plan_cargas ORDER BY etd DESC").fetchall()
-    path = build_excel(pe_rows, sol_rows, pc_rows)
-    return send_file(path, as_attachment=True, download_name="permisos_exportacion.xlsx")
-
-with app.app_context():
+if __name__ == '__main__':
     init_db()
-
-if __name__ == "__main__":
-    print("✅ App corriendo en http://localhost:5000")
-    app.run(debug=False, port=5000)
+    app.run(debug=True)
